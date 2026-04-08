@@ -24,7 +24,7 @@ This skill switches an agent into reviewer mode instead of builder mode.
 - `Data::update()` and `Data::set()` bypass casting and validation
 - Some attributes are declared but not wired
 - Schema generation is intentionally shallow
-- CI has a 90% coverage gate
+- CI has a 95% coverage gate
 - Hooks and CI can drift if command names change
 
 ## Review checklist

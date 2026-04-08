@@ -47,7 +47,7 @@ All adapters should reflect the same repository truth:
 - review, risk, and PR authoring
 - dependency, versioning, and partially wired feature policy
 - style and static analysis gates
-- 90% coverage threshold
+- 95% coverage threshold
 - git hook and PR hygiene
 - CI and release policy
 - security checks

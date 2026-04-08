@@ -37,7 +37,19 @@ final readonly class StoredEmbeddingData
         /** Arbitrary metadata stored alongside the embedding. */
         public array $meta,
 
+        /** Optional vector distance when returned from similarity search. */
+        public ?float $distance,
+
         public DateTimeInterface $createdAt,
         public DateTimeInterface $updatedAt,
     ) {}
+
+    public function score(): ?float
+    {
+        if ($this->distance === null) {
+            return null;
+        }
+
+        return max(0.0, round(1 - $this->distance, 6));
+    }
 }

@@ -8,7 +8,9 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use JOOservices\LaravelEmbedding\Exceptions\InvalidEmbeddingDimensionException;
+use JOOservices\LaravelEmbedding\Facades\EmbeddingSearch;
 use JOOservices\LaravelEmbedding\Models\Embedding;
+use JOOservices\LaravelEmbedding\Models\EmbeddingBatch;
 use JOOservices\LaravelEmbedding\Services\Embedding\EmbeddingManager;
 use JOOservices\LaravelEmbedding\Tests\TestCase;
 use Mockery;
@@ -46,6 +48,14 @@ final class EmbeddingModelAndManagerTest extends TestCase
         $this->assertNull($model->embeddable);
     }
 
+    public function test_embedding_search_facade_resolves_bound_service(): void
+    {
+        $this->assertInstanceOf(
+            \JOOservices\LaravelEmbedding\Services\Search\EmbeddingSearchService::class,
+            EmbeddingSearch::getFacadeRoot(),
+        );
+    }
+
     public function test_scope_nearest_throws_on_sqlite(): void
     {
         $this->expectException(RuntimeException::class);
@@ -66,9 +76,15 @@ final class EmbeddingModelAndManagerTest extends TestCase
     public function test_embedding_manager_dispatch_job(): void
     {
         Queue::fake();
+        $provider = Mockery::mock(\JOOservices\LaravelEmbedding\Contracts\EmbeddingProvider::class);
+        $provider->shouldReceive('providerName')->once()->andReturn('ollama');
+        $provider->shouldReceive('modelName')->once()->andReturn('nomic-embed-text');
+
         $manager = new EmbeddingManager(
             Mockery::mock(\JOOservices\LaravelEmbedding\Contracts\Chunker::class),
-            Mockery::mock(\JOOservices\LaravelEmbedding\Contracts\EmbeddingProvider::class),
+            $provider,
+            null,
+            null,
             null,
             false,
             100,
@@ -76,5 +92,81 @@ final class EmbeddingModelAndManagerTest extends TestCase
         );
         $manager->queueBatch('some text', ['foo' => 'bar']);
         Queue::assertPushed(\JOOservices\LaravelEmbedding\Jobs\ProcessEmbeddingBatchJob::class);
+    }
+
+    public function test_embedding_model_uses_overridden_connection_and_table_config(): void
+    {
+        config()->set('database.connections.custom-sqlite', config('database.connections.sqlite'));
+        config()->set('embedding.database.connection', 'custom-sqlite');
+        config()->set('embedding.database.table', 'custom_embeddings');
+        config()->set('embedding.database.batch_table', 'custom_embedding_batches');
+
+        $model = new Embedding;
+        $batchModel = new EmbeddingBatch;
+
+        $this->assertSame('custom-sqlite', $model->getConnectionName());
+        $this->assertSame('custom_embeddings', $model->getTable());
+        $this->assertSame('custom-sqlite', $batchModel->getConnectionName());
+        $this->assertSame('custom_embedding_batches', $batchModel->getTable());
+    }
+
+    public function test_scope_for_target_without_target_id_only_filters_by_type(): void
+    {
+        $sql = Embedding::query()
+            ->forTarget('document')
+            ->toSql();
+
+        $this->assertStringContainsString('"target_type" = ?', $sql);
+        $this->assertStringNotContainsString('"target_id" = ?', $sql);
+    }
+
+    public function test_with_meta_filter_supports_null_for_sqlite(): void
+    {
+        $sql = Embedding::query()
+            ->withMetaFilter('lang', null)
+            ->toSql();
+
+        $this->assertStringContainsString('json_extract("meta", \'$."lang"\') is null', $sql);
+    }
+
+    public function test_active_scope_filters_only_active_embeddings(): void
+    {
+        Embedding::query()->create([
+            'embedding' => '[1.0, 2.0]',
+            'provider' => 'ollama',
+            'model' => 'nomic-embed-text',
+            'dimension' => 2,
+            'chunk_index' => 0,
+            'content' => 'active',
+            'content_hash' => 'hash-active',
+            'is_active' => true,
+        ]);
+        Embedding::query()->create([
+            'embedding' => '[3.0, 4.0]',
+            'provider' => 'ollama',
+            'model' => 'nomic-embed-text',
+            'dimension' => 2,
+            'chunk_index' => 1,
+            'content' => 'inactive',
+            'content_hash' => 'hash-inactive',
+            'is_active' => false,
+        ]);
+
+        $active = Embedding::query()->active()->pluck('content')->all();
+
+        $this->assertSame(['active'], $active);
+    }
+
+    public function test_provider_model_and_namespace_scopes_constrain_query(): void
+    {
+        $sql = Embedding::query()
+            ->forProvider('ollama')
+            ->forModel('nomic-embed-text')
+            ->inNamespace('kb')
+            ->toSql();
+
+        $this->assertStringContainsString('"provider" = ?', $sql);
+        $this->assertStringContainsString('"model" = ?', $sql);
+        $this->assertStringContainsString('"namespace" = ?', $sql);
     }
 }

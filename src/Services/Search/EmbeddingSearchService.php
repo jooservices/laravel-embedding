@@ -8,6 +8,7 @@ use JOOservices\LaravelEmbedding\Contracts\EmbeddingProvider;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingRepository;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingSearch;
 use JOOservices\LaravelEmbedding\DTOs\ChunkData;
+use JOOservices\LaravelEmbedding\DTOs\StoredEmbeddingData;
 
 final class EmbeddingSearchService implements EmbeddingSearch
 {
@@ -32,6 +33,38 @@ final class EmbeddingSearchService implements EmbeddingSearch
 
     public function similarToVector(array $vector, int $limit = 5, array $filters = []): \Illuminate\Support\Collection
     {
-        return $this->repository->searchSimilar($vector, $limit, $filters);
+        $resultLimit = isset($filters['min_score']) ? max($limit * 3, $limit) : $limit;
+        $results = $this->repository->searchSimilar($vector, $resultLimit, $filters);
+
+        if (! isset($filters['min_score']) || ! is_numeric($filters['min_score'])) {
+            return $results->take($limit)->values();
+        }
+
+        $minScore = (float) $filters['min_score'];
+
+        return $results
+            ->filter(static fn (mixed $item): bool => $item instanceof StoredEmbeddingData && $item->score() !== null && $item->score() >= $minScore)
+            ->take($limit)
+            ->values();
+    }
+
+    public function similarToTextInNamespace(string $text, string $namespace, int $limit = 5, array $filters = []): \Illuminate\Support\Collection
+    {
+        return $this->similarToText($text, $limit, [...$filters, 'namespace' => $namespace]);
+    }
+
+    public function similarToVectorInNamespace(array $vector, string $namespace, int $limit = 5, array $filters = []): \Illuminate\Support\Collection
+    {
+        return $this->similarToVector($vector, $limit, [...$filters, 'namespace' => $namespace]);
+    }
+
+    public function similarToTextAboveScore(string $text, float $minScore, int $limit = 5, array $filters = []): \Illuminate\Support\Collection
+    {
+        return $this->similarToText($text, $limit, [...$filters, 'min_score' => $minScore]);
+    }
+
+    public function similarToVectorAboveScore(array $vector, float $minScore, int $limit = 5, array $filters = []): \Illuminate\Support\Collection
+    {
+        return $this->similarToVector($vector, $limit, [...$filters, 'min_score' => $minScore]);
     }
 }

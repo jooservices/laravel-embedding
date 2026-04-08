@@ -45,7 +45,7 @@ These files explain how code should look, how decisions should be made, and whic
 
 ## Coverage and CI
 
-- CI enforces a 90% minimum statement coverage threshold.
+- CI enforces a 95% minimum statement coverage threshold.
 - CI runs `composer audit`, a lint matrix, coverage tests, and optional dependency review on pull requests.
 - Release is tag-driven through `vX.Y.Z` tags.
 

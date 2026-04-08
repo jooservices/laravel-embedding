@@ -47,7 +47,7 @@ Do not use this skill for:
   - `composer test`
   - `composer test:coverage`
 - Git hooks (`captainhook.json`): commit message regex, pre-commit linting, gitleaks scan, pre-push tests.
-- CI gates (`.github/workflows/ci.yml`): security, lint matrix, tests + 90% coverage threshold.
+- CI gates (`.github/workflows/ci.yml`): security, lint matrix, tests + 95% coverage threshold.
 - Runtime gaps and limits (`docs/11-risks-legacy-and-gaps.md`) must be treated as current behavior.
 
 ## Module Map
@@ -106,7 +106,7 @@ Do not use this skill for:
    - Fix type/signature issues first, avoid broad suppressions
    - Re-run `composer lint:phpstan`
 - Coverage threshold fails:
-   - Add or strengthen tests until coverage is back at or above 90%
+   - Add or strengthen tests until coverage is back at or above 95%
 - Pre-commit fails on `gitleaks`:
    - Remove or rotate detected secret and replace with env/placeholder
    - Re-stage and commit again

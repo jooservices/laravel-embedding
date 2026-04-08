@@ -59,4 +59,11 @@ final class MarkdownChunkerTest extends TestCase
 
         $this->chunker->chunk('Some markdown', 10, 10);
     }
+
+    public function test_invalid_chunk_size_throws_chunking_exception(): void
+    {
+        $this->expectException(ChunkingException::class);
+
+        $this->chunker->chunk('Some markdown', 0, 0);
+    }
 }

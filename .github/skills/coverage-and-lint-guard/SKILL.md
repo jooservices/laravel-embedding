@@ -12,7 +12,7 @@ description: "Use when: adding or reviewing code that must satisfy style, static
 - `PHPCS` checks structure
 - `PHPStan` checks types and correctness
 - `PHPMD` checks maintainability
-- CI enforces 90% minimum statement coverage
+- CI enforces 95% minimum statement coverage
 
 ## Local command order
 

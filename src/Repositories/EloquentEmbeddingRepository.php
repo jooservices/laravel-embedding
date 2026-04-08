@@ -21,38 +21,26 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
 {
     public function store(EmbeddingVectorData $vector, Model|EmbeddingTargetData|null $target = null, array $meta = []): StoredEmbeddingData
     {
-        $targetData = $this->normalizeTarget($target);
-
-        $record = Embedding::query()->updateOrCreate(
-            $this->identityAttributes($vector, $targetData),
-            [
-                'embeddable_type' => $target instanceof Model ? $target->getMorphClass() : null,
-                'embeddable_id' => $target instanceof Model ? $target->getKey() : null,
-                'target_type' => $targetData?->type,
-                'target_id' => $targetData?->id === null ? null : (string) $targetData->id,
-                'provider' => $vector->provider,
-                'model' => $vector->model,
-                'dimension' => $vector->dimension,
-                'chunk_index' => $vector->chunk->index,
-                'content' => $vector->chunk->content,
-                'content_hash' => $vector->chunk->contentHash,
-                'embedding' => $vector->vector,
-                'namespace' => $targetData?->namespace,
-                'meta' => empty($meta) ? null : $meta,
-            ],
-        );
-
-        return $this->toDto($record, $vector);
+        return $this->persist($vector, $target, $meta);
     }
 
-    /**
-     * @param  EmbeddingVectorData[]  $vectors
-     * @return StoredEmbeddingData[]
-     */
+    public function stage(EmbeddingVectorData $vector, Model|EmbeddingTargetData|null $target, array $meta, string $batchToken): StoredEmbeddingData
+    {
+        return $this->persist($vector, $target, $meta, $batchToken, false);
+    }
+
     public function storeBatch(array $vectors, Model|EmbeddingTargetData|null $target = null, array $meta = []): array
     {
         return array_map(
             fn (EmbeddingVectorData $vector): StoredEmbeddingData => $this->store($vector, $target, $meta),
+            $vectors,
+        );
+    }
+
+    public function stageBatch(array $vectors, Model|EmbeddingTargetData|null $target, array $meta, string $batchToken): array
+    {
+        return array_map(
+            fn (EmbeddingVectorData $vector): StoredEmbeddingData => $this->stage($vector, $target, $meta, $batchToken),
             $vectors,
         );
     }
@@ -73,6 +61,35 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
         });
 
         return $stored;
+    }
+
+    public function activateStagedBatch(Model|EmbeddingTargetData $target, string $batchToken): int
+    {
+        $connectionName = (new Embedding)->getConnectionName();
+
+        return DB::connection($connectionName)->transaction(function () use ($target, $batchToken): int {
+            $this->applyTargetFilters(Embedding::query(), $this->normalizeTarget($target))
+                ->where(function (Builder $query) use ($batchToken): void {
+                    $query->where('is_active', true)
+                        ->orWhere(function (Builder $inner) use ($batchToken): void {
+                            $inner->where('is_active', false)
+                                ->where('batch_token', '!=', $batchToken);
+                        });
+                })
+                ->delete();
+
+            return $this->applyTargetFilters(Embedding::query(), $this->normalizeTarget($target))
+                ->where('batch_token', $batchToken)
+                ->update(['is_active' => true]);
+        });
+    }
+
+    public function deleteStagedBatch(Model|EmbeddingTargetData $target, string $batchToken): int
+    {
+        return $this->applyTargetFilters(Embedding::query(), $this->normalizeTarget($target))
+            ->where('is_active', false)
+            ->where('batch_token', $batchToken)
+            ->delete();
     }
 
     public function deleteForTarget(Model|EmbeddingTargetData $target): int
@@ -102,6 +119,7 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
         }
 
         $storedHashes = $this->applyTargetFilters(Embedding::query(), $this->normalizeTarget($target))
+            ->where('is_active', true)
             ->where('provider', $provider)
             ->where('model', $model)
             ->orderBy('chunk_index')
@@ -122,6 +140,7 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
     public function findByHash(string $contentHash): ?StoredEmbeddingData
     {
         $record = Embedding::query()
+            ->active()
             ->where('content_hash', $contentHash)
             ->first();
 
@@ -170,6 +189,7 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
             embeddableId: $record->embeddable_id,
             namespace: $record->namespace,
             meta: $record->meta ?? [],
+            distance: is_int($record->distance) ? (float) $record->distance : $record->distance,
             createdAt: $record->created_at,
             updatedAt: $record->updated_at,
         );
@@ -204,6 +224,7 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
             'model' => $vector->model,
             'chunk_index' => $vector->chunk->index,
             'content_hash' => $vector->chunk->contentHash,
+            'batch_token' => null,
         ];
     }
 
@@ -227,27 +248,98 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
         Builder $query,
         array $filters,
     ): Builder {
+        if (($filters['include_inactive'] ?? false) !== true) {
+            $query->active();
+        }
+
         if (isset($filters['target'])) {
             $query = $this->applyTargetFilters($query, $this->normalizeTarget($filters['target']));
         }
 
-        if (isset($filters['provider']) && is_string($filters['provider'])) {
-            $query->forProvider($filters['provider']);
+        $query = $this->applyScalarFilters($query, $filters);
+
+        return $this->applyMetaFilters($query, $filters['meta'] ?? null);
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function applyScalarFilters(Builder $query, array $filters): Builder
+    {
+        $provider = $filters['provider'] ?? null;
+        if (is_string($provider)) {
+            $query->forProvider($provider);
         }
 
-        if (isset($filters['model']) && is_string($filters['model'])) {
-            $query->forModel($filters['model']);
+        $targetType = $filters['target_type'] ?? null;
+        if (is_string($targetType)) {
+            $query->where('target_type', $targetType);
         }
 
-        if (isset($filters['namespace']) && is_string($filters['namespace'])) {
-            $query->inNamespace($filters['namespace']);
+        $targetId = $filters['target_id'] ?? null;
+        if (is_scalar($targetId)) {
+            $query->where('target_id', (string) $targetId);
         }
 
-        if (isset($filters['meta']) && is_array($filters['meta'])) {
-            foreach ($filters['meta'] as $key => $value) {
-                if (is_string($key)) {
-                    $query->withMetaFilter($key, $value);
-                }
+        $model = $filters['model'] ?? null;
+        if (is_string($model)) {
+            $query->forModel($model);
+        }
+
+        $namespace = $filters['namespace'] ?? null;
+        if (is_string($namespace)) {
+            $query->inNamespace($namespace);
+        }
+
+        if (isset($filters['chunk_index']) && is_int($filters['chunk_index'])) {
+            $query->where('chunk_index', $filters['chunk_index']);
+        }
+
+        return $query;
+    }
+
+    private function persist(
+        EmbeddingVectorData $vector,
+        Model|EmbeddingTargetData|null $target = null,
+        array $meta = [],
+        ?string $batchToken = null,
+        bool $isActive = true,
+    ): StoredEmbeddingData {
+        $targetData = $this->normalizeTarget($target);
+
+        $record = Embedding::query()->updateOrCreate(
+            [...$this->identityAttributes($vector, $targetData), 'batch_token' => $batchToken],
+            [
+                'embeddable_type' => $target instanceof Model ? $target->getMorphClass() : null,
+                'embeddable_id' => $target instanceof Model ? $target->getKey() : null,
+                'target_type' => $targetData?->type,
+                'target_id' => $targetData?->id === null ? null : (string) $targetData->id,
+                'provider' => $vector->provider,
+                'model' => $vector->model,
+                'dimension' => $vector->dimension,
+                'chunk_index' => $vector->chunk->index,
+                'content' => $vector->chunk->content,
+                'content_hash' => $vector->chunk->contentHash,
+                'embedding' => $vector->vector,
+                'namespace' => $targetData?->namespace,
+                'meta' => empty($meta) ? null : $meta,
+                'batch_token' => $batchToken,
+                'is_active' => $isActive,
+            ],
+        );
+
+        return $this->toDto($record, $vector);
+    }
+
+    private function applyMetaFilters(Builder $query, mixed $metaFilters): Builder
+    {
+        if (! is_array($metaFilters)) {
+            return $query;
+        }
+
+        foreach ($metaFilters as $key => $value) {
+            if (is_string($key)) {
+                $query->withMetaFilter($key, $value);
             }
         }
 

@@ -93,6 +93,7 @@ return [
         'enabled' => (bool) env('EMBEDDING_DB_ENABLED', true),
         'connection' => env('EMBEDDING_DB_CONNECTION', 'pgsql'),
         'table' => env('EMBEDDING_TABLE', 'embeddings'),
+        'batch_table' => env('EMBEDDING_BATCH_TABLE', 'embedding_batches'),
         'pgvector' => [
             'ensure_extension' => (bool) env('EMBEDDING_PGVECTOR_ENSURE_EXTENSION', false),
         ],

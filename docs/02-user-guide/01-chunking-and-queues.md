@@ -30,7 +30,11 @@ Embedding::queueBatch($pdfText, [
     'title'  => 'Annual Report 2024' // Saves to JSON `meta` column
 ]);
 ```
-This safely dispatches a `ProcessEmbeddingBatchJob` into Laravel's queue worker. You can also configure default queue connection, queue name, tries, backoff, timeout, and provider batch size in `config/embedding.php`.
+This dispatches a `ProcessEmbeddingBatchJob`, which chunks the text and fans out one `ProcessChunkJob` per chunk for parallel embedding work. You can also configure default queue connection, queue name, tries, backoff, timeout, and provider batch size in `config/embedding.php`.
+
+When `skip_if_unchanged` is enabled, the batch job compares the incoming chunk hashes with the stored target set and skips dispatching chunk jobs when the hashes already match.
+
+When `replace_existing` is enabled in the fan-out flow, the batch job clears the target once before chunk jobs are dispatched so parallel workers do not delete each other's writes. This means old vectors are not kept around while the replacement chunk jobs are still running.
 
 ## Non-Eloquent Targets
 
@@ -86,4 +90,4 @@ class UserDocument extends Model
 }
 ```
 
-When you call `$document->queueEmbedding()`, the package keeps the old embeddings in place until the replacement batch is ready to be persisted. Automatic cleanup on model removal only happens on force-delete.
+When you call `$document->queueEmbedding()`, the package dispatches the fan-out batch flow with `replace_existing` and `skip_if_unchanged` enabled. Automatic cleanup on model removal only happens on force-delete.

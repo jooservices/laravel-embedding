@@ -18,7 +18,9 @@ use JOOservices\LaravelEmbedding\Services\Chunking\DefaultChunker;
 use JOOservices\LaravelEmbedding\Services\Chunking\MarkdownChunker;
 use JOOservices\LaravelEmbedding\Services\Chunking\SentenceChunker;
 use JOOservices\LaravelEmbedding\Services\Chunking\TokenBudgetChunker;
+use JOOservices\LaravelEmbedding\Services\Embedding\EmbeddingBatchTracker;
 use JOOservices\LaravelEmbedding\Services\Embedding\EmbeddingManager;
+use JOOservices\LaravelEmbedding\Services\Ingestion\ContentNormalizer;
 use JOOservices\LaravelEmbedding\Services\Providers\Ollama\OllamaClient;
 use JOOservices\LaravelEmbedding\Services\Providers\Ollama\OllamaClientInterface;
 use JOOservices\LaravelEmbedding\Services\Providers\Ollama\OllamaEmbeddingAdapter;
@@ -42,6 +44,8 @@ final class LaravelEmbeddingServiceProvider extends ServiceProvider
         $this->registerProvider();
         $this->registerRepository();
         $this->registerSearch();
+        $this->app->singleton(ContentNormalizer::class);
+        $this->app->singleton(EmbeddingBatchTracker::class);
         $this->registerManager();
     }
 
@@ -143,6 +147,8 @@ final class LaravelEmbeddingServiceProvider extends ServiceProvider
                 chunker: $this->app->make(Chunker::class),
                 provider: $this->app->make(EmbeddingProvider::class),
                 repository: $repository,
+                normalizer: $this->app->make(ContentNormalizer::class),
+                batchTracker: $this->app->make(EmbeddingBatchTracker::class),
                 persistenceEnabled: $persistenceEnabled,
                 chunkSize: (int) config('embedding.chunking.chunk_size', 1000),
                 chunkOverlap: (int) config('embedding.chunking.chunk_overlap', 100),

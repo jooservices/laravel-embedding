@@ -35,6 +35,24 @@ abstract class TestCase extends BaseTestCase
             'database' => ':memory:',
             'prefix' => '',
         ]);
+        $app['config']->set('database.connections.testing_pgsql', [
+            'driver' => 'pgsql',
+            'database' => 'embedding_test',
+            'host' => '127.0.0.1',
+            'port' => 54321,
+            'username' => 'embedding',
+            'password' => 'secret',
+            'prefix' => '',
+        ]);
+        $app['config']->set('database.connections.testing_sqlsrv', [
+            'driver' => 'sqlsrv',
+            'database' => 'embedding_test',
+            'host' => '127.0.0.1',
+            'port' => 1433,
+            'username' => 'sa',
+            'password' => 'secret',
+            'prefix' => '',
+        ]);
 
         // Point the embedding package to sqlite for most tests.
         $app['config']->set('embedding.database.connection', 'sqlite');

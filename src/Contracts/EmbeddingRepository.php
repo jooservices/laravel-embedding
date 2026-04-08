@@ -30,6 +30,20 @@ interface EmbeddingRepository
     public function storeBatch(array $vectors, Model|EmbeddingTargetData|null $target = null, array $meta = []): array;
 
     /**
+     * Persist a staged vector that should not become searchable until activated.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    public function stage(EmbeddingVectorData $vector, Model|EmbeddingTargetData|null $target, array $meta, string $batchToken): StoredEmbeddingData;
+
+    /**
+     * @param  EmbeddingVectorData[]  $vectors
+     * @param  array<string, mixed>  $meta
+     * @return StoredEmbeddingData[]
+     */
+    public function stageBatch(array $vectors, Model|EmbeddingTargetData|null $target, array $meta, string $batchToken): array;
+
+    /**
      * Replace all stored embeddings for the given target with the provided set.
      *
      * @param  EmbeddingVectorData[]  $vectors
@@ -37,6 +51,16 @@ interface EmbeddingRepository
      * @return StoredEmbeddingData[]
      */
     public function replaceForTarget(array $vectors, Model|EmbeddingTargetData $target, array $meta = []): array;
+
+    /**
+     * Activate a staged batch and discard previously active records for the same target.
+     */
+    public function activateStagedBatch(Model|EmbeddingTargetData $target, string $batchToken): int;
+
+    /**
+     * Delete inactive staged rows for the given target and token.
+     */
+    public function deleteStagedBatch(Model|EmbeddingTargetData $target, string $batchToken): int;
 
     /**
      * Delete all embedding records associated with a given target model.

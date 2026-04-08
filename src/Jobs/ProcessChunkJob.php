@@ -11,13 +11,17 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingManager;
+use JOOservices\LaravelEmbedding\Contracts\EmbeddingRepository;
+use JOOservices\LaravelEmbedding\DTOs\ChunkData;
+use JOOservices\LaravelEmbedding\DTOs\EmbeddingTargetData;
 use JOOservices\LaravelEmbedding\Services\Embedding\EmbeddingBatchTracker;
 use Throwable;
 
 /**
- * Background job to process and embed a large text batch without blocking the main request.
+ * Background job to process a single chunk.
+ * Dispatched automatically by EmbeddingManager::queueChunked or ProcessEmbeddingBatchJob.
  */
-class ProcessEmbeddingBatchJob implements ShouldQueue
+class ProcessChunkJob implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -28,7 +32,7 @@ class ProcessEmbeddingBatchJob implements ShouldQueue
      * @param  array<string, mixed>  $context
      */
     public function __construct(
-        public readonly string $text,
+        public readonly ChunkData $chunk,
         public readonly array $context = [],
         public readonly ?string $concurrencyKey = null,
         public readonly ?int $tries = null,
@@ -41,7 +45,31 @@ class ProcessEmbeddingBatchJob implements ShouldQueue
      */
     public function handle(EmbeddingManager $manager): void
     {
-        $manager->queueChunked($this->text, $this->context);
+        $manager->embedChunk($this->chunk, $this->context);
+
+        $batchId = $this->context['batch_id'] ?? null;
+        if (! is_string($batchId) || $batchId === '') {
+            return;
+        }
+
+        $status = app(EmbeddingBatchTracker::class)->markChunkSucceeded($batchId);
+        if ($status === null || $status->status !== 'completed' || $status->stagedBatchToken === null) {
+            return;
+        }
+
+        $target = EmbeddingTargetData::fromContext($this->context);
+        if ($target === null && ! isset($this->context['target'])) {
+            return;
+        }
+
+        if (! app()->bound(EmbeddingRepository::class)) {
+            return;
+        }
+
+        app(EmbeddingRepository::class)->activateStagedBatch(
+            $this->context['target'] ?? $target,
+            $status->stagedBatchToken,
+        );
     }
 
     public function failed(?Throwable $exception): void
@@ -51,10 +79,8 @@ class ProcessEmbeddingBatchJob implements ShouldQueue
             return;
         }
 
-        app(EmbeddingBatchTracker::class)->markChunkFailed(
-            $batchId,
-            $exception?->getMessage() ?? 'Batch dispatch job failed.',
-        );
+        $message = $exception?->getMessage() ?? 'Chunk job failed.';
+        app(EmbeddingBatchTracker::class)->markChunkFailed($batchId, $message);
     }
 
     /**

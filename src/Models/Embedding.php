@@ -28,7 +28,10 @@ use RuntimeException;
  * @property int $chunk_index
  * @property string $content
  * @property string $content_hash
+ * @property string|null $batch_token
+ * @property bool $is_active
  * @property array $embedding
+ * @property float|null $distance
  * @property string|null $namespace
  * @property array|null $meta
  * @property \Illuminate\Support\Carbon $created_at
@@ -50,6 +53,8 @@ final class Embedding extends Model
         'chunk_index',
         'content',
         'content_hash',
+        'batch_token',
+        'is_active',
         'embedding',
         'namespace',
         'meta',
@@ -60,6 +65,7 @@ final class Embedding extends Model
         'dimension' => 'integer',
         'chunk_index' => 'integer',
         'target_id' => 'string',
+        'is_active' => 'boolean',
         'embedding' => 'array',
         'meta' => 'array',
     ];
@@ -114,6 +120,11 @@ final class Embedding extends Model
     public function scopeForProvider(Builder $query, string $provider): Builder
     {
         return $query->where('provider', $provider);
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
     }
 
     public function scopeForModel(Builder $query, string $model): Builder

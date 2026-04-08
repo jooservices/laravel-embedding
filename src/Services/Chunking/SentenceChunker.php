@@ -33,38 +33,16 @@ final class SentenceChunker implements Chunker
         $fallback = new DefaultChunker;
 
         foreach ($sentences as $sentence) {
-            $sentence = trim($sentence);
-            if ($sentence === '') {
-                continue;
-            }
-
-            $candidate = $buffer === '' ? $sentence : $buffer.' '.$sentence;
-            if (Str::length($candidate) <= $size) {
-                $buffer = $candidate;
-
-                continue;
-            }
-
-            if ($buffer !== '') {
-                $this->flush($buffer, $offset, $index, $chunks);
-            }
-
-            if (Str::length($sentence) > $size) {
-                foreach ($fallback->chunk($sentence, $size, $overlap) as $subChunk) {
-                    $subLength = Str::length($subChunk->content);
-                    $chunks[] = ChunkData::make(
-                        content: $subChunk->content,
-                        index: $index++,
-                        startOffset: $offset,
-                        endOffset: $offset + $subLength,
-                    );
-                    $offset += $subLength;
-                }
-
-                continue;
-            }
-
-            $buffer = $sentence;
+            $this->appendSentence(
+                $sentence,
+                $size,
+                $overlap,
+                $buffer,
+                $offset,
+                $index,
+                $chunks,
+                $fallback,
+            );
         }
 
         if ($buffer !== '') {
@@ -95,5 +73,61 @@ final class SentenceChunker implements Chunker
         );
         $offset += $length;
         $buffer = '';
+    }
+
+    /**
+     * @param  ChunkData[]  $chunks
+     */
+    private function appendSentence(
+        string $sentence,
+        int $size,
+        int $overlap,
+        string &$buffer,
+        int &$offset,
+        int &$index,
+        array &$chunks,
+        DefaultChunker $fallback,
+    ): void {
+        $sentence = trim($sentence);
+        if ($sentence === '') {
+            return;
+        }
+
+        $candidate = $buffer === '' ? $sentence : $buffer.' '.$sentence;
+        if (Str::length($candidate) <= $size) {
+            $buffer = $candidate;
+
+            return;
+        }
+
+        if ($buffer !== '') {
+            $this->flush($buffer, $offset, $index, $chunks);
+        }
+
+        if (Str::length($sentence) <= $size) {
+            $buffer = $sentence;
+
+            return;
+        }
+
+        $this->appendFallbackChunks($fallback->chunk($sentence, $size, $overlap), $offset, $index, $chunks);
+    }
+
+    /**
+     * @param  ChunkData[]  $subChunks
+     * @param  ChunkData[]  $chunks
+     */
+    private function appendFallbackChunks(array $subChunks, int &$offset, int &$index, array &$chunks): void
+    {
+        foreach ($subChunks as $subChunk) {
+            $subLength = Str::length($subChunk->content);
+            $chunks[] = ChunkData::make(
+                content: $subChunk->content,
+                index: $index++,
+                startOffset: $offset,
+                endOffset: $offset + $subLength,
+            );
+            $offset += $subLength;
+        }
     }
 }

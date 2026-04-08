@@ -20,7 +20,7 @@ This is the baseline skill for `jooservices/dto`.
 - Keep `PHP-CS-Fixer` limited to its narrow PHPDoc cleanup role
 - Run `PHPCS`, `PHPStan`, and `PHPMD` for structural, type, and maintainability checks
 - Run `PHPUnit` tests
-- Keep CI coverage at or above 90%
+- Keep CI coverage at or above 95%
 
 ## Command map
 

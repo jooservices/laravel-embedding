@@ -54,8 +54,8 @@ trait HasEmbeddings
             return;
         }
 
-        // Dispatch a batch embedding generation. Old vectors are only replaced
-        // after the new batch has been generated successfully.
+        // Dispatch the fan-out batch generation flow. When replacement is
+        // requested, the target is cleared once before chunk jobs are enqueued.
         $context = array_merge($meta, [
             'target' => $this,
             'replace_existing' => true,

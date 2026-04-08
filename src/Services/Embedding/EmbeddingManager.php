@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace JOOservices\LaravelEmbedding\Services\Embedding;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
 use JOOservices\LaravelEmbedding\Contracts\Chunker;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingManager as EmbeddingManagerContract;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingProvider;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingRepository;
 use JOOservices\LaravelEmbedding\DTOs\ChunkData;
 use JOOservices\LaravelEmbedding\DTOs\EmbeddingBatchResultData;
-use JOOservices\LaravelEmbedding\DTOs\EmbeddingTargetData;
 use JOOservices\LaravelEmbedding\DTOs\EmbeddingVectorData;
 use JOOservices\LaravelEmbedding\Exceptions\ChunkingException;
 use JOOservices\LaravelEmbedding\Exceptions\EmbeddingFailedException;
-use JOOservices\LaravelEmbedding\Jobs\ProcessEmbeddingBatchJob;
+use JOOservices\LaravelEmbedding\Services\Embedding\Concerns\HandlesEmbeddingIngestion;
+use JOOservices\LaravelEmbedding\Services\Embedding\Concerns\HandlesEmbeddingQueueBatches;
+use JOOservices\LaravelEmbedding\Services\Embedding\Concerns\ManagesEmbeddingContext;
+use JOOservices\LaravelEmbedding\Services\Ingestion\ContentNormalizer;
 
 /**
  * Primary orchestration service for the embedding package.
@@ -35,10 +35,16 @@ use JOOservices\LaravelEmbedding\Jobs\ProcessEmbeddingBatchJob;
  */
 final class EmbeddingManager implements EmbeddingManagerContract
 {
+    use HandlesEmbeddingIngestion;
+    use HandlesEmbeddingQueueBatches;
+    use ManagesEmbeddingContext;
+
     public function __construct(
         private readonly Chunker $chunker,
         private readonly EmbeddingProvider $provider,
         private readonly ?EmbeddingRepository $repository,
+        private readonly ?ContentNormalizer $normalizer,
+        private readonly ?EmbeddingBatchTracker $batchTracker,
         private readonly bool $persistenceEnabled,
         private readonly int $chunkSize,
         private readonly int $chunkOverlap,
@@ -48,7 +54,9 @@ final class EmbeddingManager implements EmbeddingManagerContract
         private readonly int $queueTries = 1,
         private readonly int|array $queueBackoff = 0,
         private readonly int $queueTimeout = 120,
-    ) {}
+    ) {
+        // Dependencies are injected directly and need no additional boot logic.
+    }
 
     /**
      * Embed a single piece of text without chunking.
@@ -189,114 +197,36 @@ final class EmbeddingManager implements EmbeddingManagerContract
         return $result;
     }
 
-    /**
-     * Guard against empty text input.
-     *
-     * @throws InvalidArgumentException
-     */
-    private function assertNotEmpty(string $text, string $message = ''): void
+    public function embedChunk(ChunkData $chunk, array $context = []): EmbeddingVectorData
     {
-        if (trim($text) === '') {
-            throw new InvalidArgumentException(
-                $message !== '' ? $message : 'Input text must not be empty.',
-            );
-        }
-    }
+        $vector = $this->provider->embed($chunk);
 
-    /**
-     * Extract the optional Eloquent model target from the context array.
-     * Convention: pass the model under the key "target".
-     */
-    private function extractTarget(array $context): Model|EmbeddingTargetData|null
-    {
-        $target = $context['target'] ?? null;
+        if ($this->persistenceEnabled && $this->repository !== null) {
+            $target = $this->extractTarget($context);
+            $meta = $this->extractMeta($context);
 
-        if ($target instanceof Model) {
-            return $target;
-        }
+            if ($this->shouldSkipUnchanged($context) && $target !== null) {
+                $existing = $this->repository->findForTarget($target, [
+                    'provider' => $this->provider->providerName(),
+                    'model' => $this->provider->modelName(),
+                    'chunk_index' => $chunk->index,
+                ])->first();
 
-        if ($target instanceof EmbeddingTargetData) {
-            return $target;
-        }
+                if ($existing !== null && $existing->vector->chunk->contentHash === $vector->chunk->contentHash) {
+                    return $existing->vector;
+                }
+            }
 
-        return EmbeddingTargetData::fromContext($context);
-    }
+            $stagedBatchToken = $context['staged_batch_token'] ?? null;
 
-    /**
-     * Strip reserved context keys and return the remainder as arbitrary metadata.
-     */
-    private function extractMeta(array $context): array
-    {
-        $reserved = [
-            'target',
-            'target_type',
-            'target_id',
-            'namespace',
-            'chunk_size',
-            'chunk_overlap',
-            'batch_size',
-            'replace_existing',
-            'skip_if_unchanged',
-            'queue_connection',
-            'queue_name',
-            'queue_tries',
-            'queue_backoff',
-            'queue_timeout',
-            'concurrency_key',
-        ];
-
-        return array_diff_key($context, array_flip($reserved));
-    }
-
-    private function shouldReplaceExisting(array $context): bool
-    {
-        return (bool) ($context['replace_existing'] ?? false);
-    }
-
-    private function shouldSkipUnchanged(array $context): bool
-    {
-        return (bool) ($context['skip_if_unchanged'] ?? false);
-    }
-
-    /**
-     * @param  EmbeddingVectorData[]  $vectors
-     * @param  array<string, mixed>  $meta
-     */
-    private function persistVectors(array $vectors, Model|EmbeddingTargetData|null $target, array $meta, bool $replaceExisting): void
-    {
-        if ($this->repository === null || empty($vectors)) {
-            return;
+            if (is_string($stagedBatchToken) && $stagedBatchToken !== '' && $target !== null) {
+                $this->repository->stage($vector, $target, $meta, $stagedBatchToken);
+            } else {
+                $this->persistVectors([$vector], $target, $meta, false);
+            }
         }
 
-        if ($replaceExisting && $target !== null) {
-            $this->repository->replaceForTarget($vectors, $target, $meta);
-
-            return;
-        }
-
-        if (count($vectors) === 1) {
-            $this->repository->store($vectors[0], $target, $meta);
-
-            return;
-        }
-
-        $this->repository->storeBatch($vectors, $target, $meta);
-    }
-
-    public function queueBatch(string $text, array $context = []): \Illuminate\Foundation\Bus\PendingDispatch
-    {
-        $job = new ProcessEmbeddingBatchJob(
-            text: $text,
-            context: $context,
-            concurrencyKey: $this->resolveConcurrencyKey($context),
-            tries: (int) ($context['queue_tries'] ?? $this->queueTries),
-            backoff: $context['queue_backoff'] ?? $this->queueBackoff,
-            timeout: (int) ($context['queue_timeout'] ?? $this->queueTimeout),
-        );
-
-        return dispatch($job)
-            ->onConnection($context['queue_connection'] ?? $this->queueConnection)
-            ->onQueue($context['queue_name'] ?? $this->queueName);
+        return $vector;
     }
 
     public function chunkPreview(string $text, array $context = []): array
@@ -336,24 +266,5 @@ final class EmbeddingManager implements EmbeddingManagerContract
             provider: $this->provider->providerName(),
             model: $this->provider->modelName(),
         );
-    }
-
-    /**
-     * @param  array<string, mixed>  $context
-     */
-    private function resolveConcurrencyKey(array $context): ?string
-    {
-        if (isset($context['concurrency_key']) && is_string($context['concurrency_key']) && $context['concurrency_key'] !== '') {
-            return $context['concurrency_key'];
-        }
-
-        $target = EmbeddingTargetData::fromContext($context);
-        if ($target === null || $target->type === null || $target->id === null) {
-            return null;
-        }
-
-        $key = $target->type.':'.$target->id;
-
-        return $target->namespace === null ? $key : $target->namespace.':'.$key;
     }
 }
