@@ -1,0 +1,17 @@
+---
+description: Baseline repository rules for jooservices/dto
+globs: ["**/*"]
+alwaysApply: true
+---
+
+Follow [AGENTS.md](/Users/vietvu/Sites/JOOservices/dto/AGENTS.md) as the repository-wide policy.
+
+Focus on:
+
+- minimal repository-consistent changes
+- repository-native code style and conventions
+- architecture principles and compatibility-safe decisions
+- understanding class and module ownership before editing
+- tests and docs shipped with behavior changes
+- hook and CI awareness
+- respect for current runtime gaps and compatibility constraints

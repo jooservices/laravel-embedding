@@ -1,0 +1,73 @@
+{
+    "$schema": "https://captainhookphp.github.io/captainhook/schema.json",
+    "commit-msg": {
+        "enabled": true,
+        "actions": [
+            {
+                "action": "\\CaptainHook\\App\\Hook\\Message\\Action\\Regex",
+                "options": {
+                    "regex": "/^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\\(.+\\))?!?:\\s.{1,100}$/",
+                    "error": "Commit message must follow Conventional Commits format: <type>(<scope>): <description>"
+                }
+            }
+        ]
+    },
+    "pre-commit": {
+        "enabled": true,
+        "actions": [
+            {
+                "action": "files=$(git diff --cached --name-only --diff-filter=ACM -- '*.php'); if [ -n \"$files\" ]; then echo \"$files\" | while IFS= read -r file; do php -l \"$file\" || exit 1; done; fi",
+                "conditions": []
+            },
+            {
+                "action": "echo '🔒 Scanning for secrets...' && gitleaks protect --staged --verbose --redact --config=.gitleaks.toml",
+                "conditions": []
+            },
+            {
+                "action": "echo 'Running Pint style check...' && composer lint:pint",
+                "conditions": []
+            },
+            {
+                "action": "echo 'Running PHPCS structural checks...' && composer lint:phpcs",
+                "conditions": []
+            },
+            {
+                "action": "echo 'Running PHPStan static analysis...' && composer lint:phpstan",
+                "conditions": []
+            }
+        ]
+    },
+    "pre-push": {
+        "enabled": true,
+        "actions": [
+            {
+                "action": "echo '🔒 Scanning commits for secrets...' && gitleaks detect --verbose --redact --config=.gitleaks.toml --log-opts=\"origin/main..HEAD\" || echo 'Note: Gitleaks scan of unpushed commits (install gitleaks: brew install gitleaks)'",
+                "conditions": []
+            },
+            {
+                "action": "echo 'Running tests...' && composer test",
+                "conditions": []
+            }
+        ]
+    },
+    "post-merge": {
+        "enabled": false,
+        "actions": []
+    },
+    "post-checkout": {
+        "enabled": false,
+        "actions": []
+    },
+    "post-rewrite": {
+        "enabled": false,
+        "actions": []
+    },
+    "post-change": {
+        "enabled": false,
+        "actions": []
+    },
+    "prepare-commit-msg": {
+        "enabled": false,
+        "actions": []
+    }
+}

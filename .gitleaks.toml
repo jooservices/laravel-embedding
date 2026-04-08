@@ -1,0 +1,4 @@
+title = "JOOservices Laravel Embedding Library gitleaks config"
+
+[extend]
+useDefault = true

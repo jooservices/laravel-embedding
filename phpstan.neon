@@ -1,0 +1,66 @@
+includes:
+    - vendor/phpstan/phpstan-strict-rules/rules.neon
+    - vendor/phpstan/phpstan-phpunit/extension.neon
+    - vendor/phpstan/phpstan-mockery/extension.neon
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: max
+    paths:
+        - src
+        - tests
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: true
+    checkMissingCallableSignature: true
+    checkUninitializedProperties: true
+    checkDynamicProperties: true
+    polluteScopeWithLoopInitialAssignments: false
+    polluteScopeWithAlwaysIterableForeach: false
+    checkExplicitMixedMissingReturn: true
+    checkFunctionNameCase: true
+    checkInternalClassCaseSensitivity: true
+    reportMaybesInMethodSignatures: true
+    reportStaticMethodSignatures: true
+    reportMaybesInPropertyPhpDocTypes: true
+    reportWrongPhpDocTypeInVarTag: true
+    exceptions:
+        implicitThrows: false
+        check:
+            missingCheckedExceptionInThrows: false
+            tooWideThrowType: false
+    ignoreErrors:
+        - '#Dynamic call to static method PHPUnit\\Framework\\Assert::#'
+        - '#Cannot call method make\(\) on Illuminate\\Foundation\\Application\|null.#'
+        - '#Parameter .* of method PHPUnit\\Framework\\Assert::assert.* expects .*, string given\.#'
+        -
+            identifier: property.onlyWritten
+        -
+            identifier: missingType.iterableValue
+        -
+            identifier: method.alreadyNarrowedType
+        -
+            identifier: staticMethod.dynamicCall
+        -
+            identifier: empty.notAllowed
+        -
+            identifier: argument.type
+        -
+            identifier: cast.int
+        -
+            identifier: catch.neverThrown
+        -
+            identifier: return.type
+        -
+            identifier: return.unusedType
+        -
+            identifier: if.condNotBoolean
+        -
+            identifier: offsetAccess.nonOffsetAccessible
+        -
+            identifier: missingType.generics
+        -
+            identifier: property.phpDocType
+        -
+            identifier: method.notFound
+        -
+            identifier: function.alreadyNarrowedType

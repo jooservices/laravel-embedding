@@ -1,0 +1,9 @@
+---
+description: Guard runtime compatibility and unsupported-feature drift
+globs: ["src/**/*.php", "docs/**/*.md", "README.md", "tests/**/*.php"]
+alwaysApply: false
+---
+
+Use `.github/skills/runtime-compatibility-guard/SKILL.md`.
+
+Do not overstate support for partially wired runtime features.

@@ -1,0 +1,108 @@
+{
+    "name": "jooservices/laravel-embedding",
+    "description": "A reusable Laravel package for text chunking, embedding generation, and optional vector persistence.",
+    "version": "1.0.0",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "embedding",
+        "ollama",
+        "vector",
+        "chunking",
+        "ai"
+    ],
+    "authors": [
+        {
+            "name": "Viet Vu",
+            "email": "jooservices@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.5",
+        "illuminate/support": "^11.0|^12.0",
+        "illuminate/database": "^11.0|^12.0",
+        "illuminate/http": "^11.0|^12.0",
+        "jooservices/dto": "*"
+    },
+    "require-dev": {
+        "captainhook/captainhook": "^5.23",
+        "captainhook/plugin-composer": "^5.3",
+        "fakerphp/faker": "^1.24",
+        "friendsofphp/php-cs-fixer": "^3.65",
+        "larastan/larastan": "^3.9",
+        "laravel/pint": "^1.18",
+        "mockery/mockery": "^1.6",
+        "orchestra/testbench": "^9.0|^10.0",
+        "phpmd/phpmd": "^2.15",
+        "phpstan/phpstan": "^2.0",
+        "phpstan/phpstan-mockery": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "phpunit/phpunit": "^12.0 || ^13.0",
+        "squizlabs/php_codesniffer": "^3.8 || ^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "JOOservices\\LaravelEmbedding\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "JOOservices\\LaravelEmbedding\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "JOOservices\\LaravelEmbedding\\LaravelEmbeddingServiceProvider"
+            ],
+            "aliases": {
+                "Embedding": "JOOservices\\LaravelEmbedding\\Facades\\Embedding"
+            }
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "captainhook/plugin-composer": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "scripts": {
+        "test": "phpunit",
+        "test:coverage": "phpunit --coverage-html coverage --coverage-clover coverage.xml",
+        "lint:pint": "pint --test",
+        "lint:pint:fix": "pint",
+        "lint:cs": "php-cs-fixer fix --config=.php-cs-fixer.dist.php --dry-run --diff --sequential",
+        "lint:cs:fix": "php-cs-fixer fix --config=.php-cs-fixer.dist.php --sequential",
+        "lint:phpcs": "phpcs --standard=phpcs.xml",
+        "lint:phpstan": "XDEBUG_MODE=off phpstan analyse --configuration=phpstan.neon --memory-limit=512M --debug",
+        "lint:phpmd": "php -d error_reporting=6143 vendor/bin/phpmd src text phpmd.xml",
+        "lint": [
+            "@lint:pint",
+            "@lint:phpcs",
+            "@lint:phpstan"
+        ],
+        "lint:all": [
+            "@lint",
+            "@lint:phpmd",
+            "@lint:cs"
+        ],
+        "lint:fix": [
+            "@lint:pint:fix",
+            "@lint:cs:fix"
+        ],
+        "check": [
+            "@lint:all",
+            "@test"
+        ],
+        "ci": [
+            "@lint:all",
+            "@test:coverage"
+        ],
+        "post-install-cmd": "captainhook install --force --skip-existing",
+        "post-update-cmd": "captainhook install --force --skip-existing"
+    }
+}

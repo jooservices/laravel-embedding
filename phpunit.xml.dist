@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         cacheDirectory=".phpunit.cache"
+         executionOrder="depends,defects"
+         shortenArraysForExportThreshold="10"
+         requireCoverageMetadata="false"
+         beStrictAboutCoverageMetadata="true"
+         beStrictAboutOutputDuringTests="true"
+         failOnRisky="true"
+         failOnWarning="true"
+         failOnIncomplete="true"
+         failOnSkipped="false"
+         failOnEmptyTestSuite="true"
+         failOnDeprecation="true"
+         failOnPhpunitDeprecation="true"
+         failOnNotice="true"
+         displayDetailsOnIncompleteTests="true"
+         displayDetailsOnSkippedTests="true"
+         displayDetailsOnTestsThatTriggerDeprecations="true"
+         displayDetailsOnTestsThatTriggerErrors="true"
+         displayDetailsOnTestsThatTriggerNotices="true"
+         displayDetailsOnTestsThatTriggerWarnings="true"
+         colors="true"
+         testdox="true"
+         stopOnFailure="false"
+         stopOnError="false">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory suffix=".php">src</directory>
+        </include>
+    </source>
+
+    <coverage includeUncoveredFiles="true"
+              pathCoverage="false"
+              ignoreDeprecatedCodeUnits="true">
+        <report>
+            <clover outputFile="coverage.xml"/>
+            <html outputDirectory="coverage"/>
+            <text outputFile="php://stdout" showOnlySummary="true"/>
+        </report>
+    </coverage>
+
+    <php>
+        <!-- Default test driver: sqlite (in-memory, for unit/feature isolation) -->
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="DB_DATABASE" value=":memory:"/>
+
+        <!-- Postgres (dockerized, non-conflicting port 54321) -->
+        <env name="PGSQL_HOST" value="127.0.0.1"/>
+        <env name="PGSQL_PORT" value="54321"/>
+        <env name="PGSQL_DATABASE" value="embedding_test"/>
+        <env name="PGSQL_USERNAME" value="embedding"/>
+        <env name="PGSQL_PASSWORD" value="secret"/>
+
+        <!-- MongoDB (dockerized, non-conflicting port 27018) -->
+        <env name="MONGO_HOST" value="127.0.0.1"/>
+        <env name="MONGO_PORT" value="27018"/>
+        <env name="MONGO_DATABASE" value="embedding_test"/>
+
+        <!-- Ollama (local instance, not mocked in unit tests) -->
+        <env name="OLLAMA_BASE_URL" value="http://localhost:11434/api"/>
+        <env name="OLLAMA_EMBEDDING_MODEL" value="nomic-embed-text"/>
+
+        <!-- Embedding package -->
+        <env name="EMBEDDING_DB_CONNECTION" value="sqlite"/>
+        <env name="EMBEDDING_TABLE" value="embeddings"/>
+    </php>
+</phpunit>

@@ -1,0 +1,28 @@
+/vendor/
+/node_modules/
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Testing & Coverage
+/.phpunit.result.cache
+/coverage/
+/build/
+
+# Environment Variables
+.env
+.env.backup
+.env.testing
+
+# Logs
+*.log
+npm-debug.log
+yarn-error.log
+
+# Lock files (Optional for packages, but typically ignored)
+# composer.lock
+# package-lock.json

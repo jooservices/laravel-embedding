@@ -1,0 +1,13 @@
+---
+description: Apply CI, hooks, release, and PR policy when changing automation or preparing releases
+globs: [".github/workflows/**/*.yml", "captainhook.json", "composer.json", "docs/04-development/**/*.md"]
+alwaysApply: false
+---
+
+Use:
+
+- `.github/skills/ci-hooks-maintenance/SKILL.md`
+- `.github/skills/release-management/SKILL.md`
+- `.github/skills/security-hardening/SKILL.md`
+
+Keep local hooks, CI, semantic PR policy, and release behavior aligned.
