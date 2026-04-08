@@ -75,4 +75,4 @@ jobs:
         run: |
           curl -XPOST -H'content-type:application/json' \
             'https://packagist.org/api/update-package?username=${{ secrets.PACKAGIST_USERNAME }}' \
-            -d'{"repository":{"url":"https://packagist.org/packages/jooservices/dto"},"api_token":"${{ secrets.PACKAGIST_TOKEN }}"}'
+            -d'{"repository":{"url":"https://packagist.org/packages/jooservices/laravel-embedding"},"api_token":"${{ secrets.PACKAGIST_TOKEN }}"}'
