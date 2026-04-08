@@ -12,7 +12,11 @@ pnpm-lock.yaml
 
 # Testing & Artifacts
 /.phpunit.result.cache
+/.phpunit.cache/
+/.php-cs-fixer.cache
 /coverage/
+/coverage.txt
+/coverage.xml
 /build/
 *.log
 
