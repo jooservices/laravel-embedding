@@ -27,8 +27,11 @@ trait HasEmbeddings
      */
     protected static function bootHasEmbeddings(): void
     {
-        // When the parent model is deleted, automatically wipe its vectors
         static::deleting(function (self $model) {
+            if (method_exists($model, 'isForceDeleting') && ! $model->isForceDeleting()) {
+                return;
+            }
+
             $model->embeddings()->delete();
         });
     }
@@ -51,11 +54,13 @@ trait HasEmbeddings
             return;
         }
 
-        // Wipe old vectors so we don't duplicate when re-embedding.
-        $this->embeddings()->delete();
-
-        // Dispatch a batch embedding generation
-        $context = array_merge($meta, ['target' => $this]);
+        // Dispatch a batch embedding generation. Old vectors are only replaced
+        // after the new batch has been generated successfully.
+        $context = array_merge($meta, [
+            'target' => $this,
+            'replace_existing' => true,
+            'skip_if_unchanged' => true,
+        ]);
         \JOOservices\LaravelEmbedding\Facades\Embedding::queueBatch($text, $context);
     }
 }

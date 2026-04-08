@@ -21,9 +21,7 @@ final class MarkdownChunker implements Chunker
      */
     public function chunk(string $text, int $size, int $overlap): array
     {
-        if (trim($text) === '') {
-            throw new ChunkingException('Cannot chunk an empty text string.');
-        }
+        $this->validateParameters($text, $size, $overlap);
 
         $blocks = preg_split('/\n\s*\n/u', $text, -1, PREG_SPLIT_NO_EMPTY);
 
@@ -38,7 +36,8 @@ final class MarkdownChunker implements Chunker
         $defaultChunker = new DefaultChunker;
 
         foreach ($blocks as $block) {
-            if (Str::length($currentBuffer) + Str::length($block) > $size && $currentBuffer !== '') {
+            $separatorLength = $currentBuffer === '' ? 0 : 2;
+            if (Str::length($currentBuffer) + $separatorLength + Str::length(trim($block)) > $size && $currentBuffer !== '') {
                 $this->processBuffer($currentBuffer, $offset, $index, $chunks);
             }
 
@@ -57,6 +56,27 @@ final class MarkdownChunker implements Chunker
         }
 
         return $chunks;
+    }
+
+    private function validateParameters(string $text, int $size, int $overlap): void
+    {
+        if (trim($text) === '') {
+            throw new ChunkingException('Cannot chunk an empty text string.');
+        }
+
+        if ($size <= 0) {
+            throw new ChunkingException("Chunk size must be a positive integer, [{$size}] given.");
+        }
+
+        if ($overlap < 0) {
+            throw new ChunkingException("Chunk overlap must be zero or positive, [{$overlap}] given.");
+        }
+
+        if ($overlap >= $size) {
+            throw new ChunkingException(
+                "Chunk overlap [{$overlap}] must be less than chunk size [{$size}].",
+            );
+        }
     }
 
     /**

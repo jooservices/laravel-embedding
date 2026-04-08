@@ -25,4 +25,11 @@ final class ProcessEmbeddingBatchJobTest extends TestCase
 
         $this->assertTrue(true);
     }
+
+    public function test_middleware_returns_without_overlapping_when_concurrency_key_is_present(): void
+    {
+        $job = new ProcessEmbeddingBatchJob('some text', ['foo' => 'bar'], 'docs:1');
+
+        $this->assertCount(1, $job->middleware());
+    }
 }

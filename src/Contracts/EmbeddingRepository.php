@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JOOservices\LaravelEmbedding\Contracts;
 
 use Illuminate\Database\Eloquent\Model;
+use JOOservices\LaravelEmbedding\DTOs\EmbeddingTargetData;
 use JOOservices\LaravelEmbedding\DTOs\EmbeddingVectorData;
 use JOOservices\LaravelEmbedding\DTOs\StoredEmbeddingData;
 
@@ -17,7 +18,7 @@ interface EmbeddingRepository
      * @param  Model|null  $target  Optional polymorphic target model.
      * @param  array<string, mixed>  $meta  Arbitrary metadata to store alongside.
      */
-    public function store(EmbeddingVectorData $vector, ?Model $target = null, array $meta = []): StoredEmbeddingData;
+    public function store(EmbeddingVectorData $vector, Model|EmbeddingTargetData|null $target = null, array $meta = []): StoredEmbeddingData;
 
     /**
      * Persist a batch of embedding vectors.
@@ -26,12 +27,37 @@ interface EmbeddingRepository
      * @param  array<string, mixed>  $meta
      * @return StoredEmbeddingData[]
      */
-    public function storeBatch(array $vectors, ?Model $target = null, array $meta = []): array;
+    public function storeBatch(array $vectors, Model|EmbeddingTargetData|null $target = null, array $meta = []): array;
+
+    /**
+     * Replace all stored embeddings for the given target with the provided set.
+     *
+     * @param  EmbeddingVectorData[]  $vectors
+     * @param  array<string, mixed>  $meta
+     * @return StoredEmbeddingData[]
+     */
+    public function replaceForTarget(array $vectors, Model|EmbeddingTargetData $target, array $meta = []): array;
 
     /**
      * Delete all embedding records associated with a given target model.
      */
-    public function deleteForTarget(Model $target): int;
+    public function deleteForTarget(Model|EmbeddingTargetData $target): int;
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return \Illuminate\Support\Collection<int, StoredEmbeddingData>
+     */
+    public function findForTarget(Model|EmbeddingTargetData $target, array $filters = []): \Illuminate\Support\Collection;
+
+    /**
+     * @param  string[]  $contentHashes
+     */
+    public function hasMatchingContentHashes(
+        Model|EmbeddingTargetData $target,
+        array $contentHashes,
+        string $provider,
+        string $model,
+    ): bool;
 
     /**
      * Find a stored embedding by its content hash.
@@ -44,5 +70,5 @@ interface EmbeddingRepository
      *
      * @param  array<float>  $embedding
      */
-    public function searchSimilar(array $embedding, int $limit = 5): \Illuminate\Support\Collection;
+    public function searchSimilar(array $embedding, int $limit = 5, array $filters = []): \Illuminate\Support\Collection;
 }

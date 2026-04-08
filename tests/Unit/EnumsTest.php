@@ -15,8 +15,12 @@ final class EnumsTest extends TestCase
     {
         $this->assertSame('default', ChunkingStrategy::Default->value);
         $this->assertSame('sentence', ChunkingStrategy::Sentence->value);
+        $this->assertSame('markdown', ChunkingStrategy::Markdown->value);
+        $this->assertSame('token', ChunkingStrategy::Token->value);
         $this->assertSame(ChunkingStrategy::Default, ChunkingStrategy::fromConfig('invalid'));
         $this->assertSame(ChunkingStrategy::Sentence, ChunkingStrategy::fromConfig('sentence'));
+        $this->assertSame(ChunkingStrategy::Markdown, ChunkingStrategy::fromConfig('markdown'));
+        $this->assertSame(ChunkingStrategy::Token, ChunkingStrategy::fromConfig('token'));
     }
 
     public function test_embedding_model(): void

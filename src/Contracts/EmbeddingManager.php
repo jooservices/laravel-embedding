@@ -58,4 +58,12 @@ interface EmbeddingManager
      * @param  array<string, mixed>  $context
      */
     public function queueBatch(string $text, array $context = []): \Illuminate\Foundation\Bus\PendingDispatch;
+
+    /**
+     * Return a developer-friendly summary of how the current chunker would split the text.
+     *
+     * @param  array<string, mixed>  $context
+     * @return array<int, array<string, mixed>>
+     */
+    public function chunkPreview(string $text, array $context = []): array;
 }

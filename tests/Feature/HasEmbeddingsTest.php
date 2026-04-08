@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JOOservices\LaravelEmbedding\Tests\Feature;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
@@ -36,6 +37,16 @@ class BadEmbeddableModel extends Model
     protected $guarded = [];
 }
 
+class SoftDeletingEmbeddableModel extends Model
+{
+    use HasEmbeddings;
+    use SoftDeletes;
+
+    protected $table = 'soft_embeddable_models';
+
+    protected $guarded = [];
+}
+
 final class HasEmbeddingsTest extends TestCase
 {
     protected function setUp(): void
@@ -45,6 +56,12 @@ final class HasEmbeddingsTest extends TestCase
         Schema::create('embeddable_models', function (Blueprint $table) {
             $table->id();
             $table->string('content')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('soft_embeddable_models', function (Blueprint $table) {
+            $table->id();
+            $table->string('content')->nullable();
+            $table->softDeletes();
             $table->timestamps();
         });
     }
@@ -73,6 +90,24 @@ final class HasEmbeddingsTest extends TestCase
         $this->assertEquals(0, \JOOservices\LaravelEmbedding\Models\Embedding::count());
     }
 
+    public function test_soft_delete_keeps_embeddings(): void
+    {
+        $model = SoftDeletingEmbeddableModel::create();
+        $model->embeddings()->create([
+            'embedding' => '[1.0, 2.0]',
+            'content' => 'hello',
+            'content_hash' => 'soft-hash',
+            'dimension' => 2,
+            'provider' => 'ollama',
+            'model' => 'nomic-embed-text',
+            'chunk_index' => 0,
+        ]);
+
+        $model->delete();
+
+        $this->assertEquals(1, \JOOservices\LaravelEmbedding\Models\Embedding::count());
+    }
+
     public function test_queue_embedding_throws_without_method(): void
     {
         $this->expectException(RuntimeException::class);
@@ -99,7 +134,32 @@ final class HasEmbeddingsTest extends TestCase
         $model->queueEmbedding(['extra' => 'meta']);
 
         Queue::assertPushed(ProcessEmbeddingBatchJob::class, function (ProcessEmbeddingBatchJob $job) {
-            return $job->text === 'hello world';
+            return $job->text === 'hello world'
+                && ($job->context['replace_existing'] ?? false) === true
+                && ($job->context['skip_if_unchanged'] ?? false) === true;
         });
+    }
+
+    public function test_queue_embedding_keeps_existing_embeddings_until_job_runs(): void
+    {
+        Queue::fake();
+
+        $model = EmbeddableModel::create(['content' => 'hello world']);
+        $model->embeddings()->create([
+            'embedding' => '[1.0, 2.0]',
+            'content' => 'existing',
+            'content_hash' => 'existing-hash',
+            'dimension' => 2,
+            'provider' => 'ollama',
+            'model' => 'nomic-embed-text',
+            'chunk_index' => 0,
+        ]);
+
+        $model->queueEmbedding();
+
+        $freshModel = $model->fresh();
+
+        $this->assertNotNull($freshModel);
+        $this->assertEquals(1, $freshModel->embeddings()->count());
     }
 }

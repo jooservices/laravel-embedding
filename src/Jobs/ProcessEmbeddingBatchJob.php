@@ -8,6 +8,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingManager;
 
@@ -27,6 +28,10 @@ class ProcessEmbeddingBatchJob implements ShouldQueue
     public function __construct(
         public readonly string $text,
         public readonly array $context = [],
+        public readonly ?string $concurrencyKey = null,
+        public readonly ?int $tries = null,
+        public readonly int|array|null $backoff = null,
+        public readonly ?int $timeout = null,
     ) {}
 
     /**
@@ -35,5 +40,19 @@ class ProcessEmbeddingBatchJob implements ShouldQueue
     public function handle(EmbeddingManager $manager): void
     {
         $manager->chunkAndEmbed($this->text, $this->context);
+    }
+
+    /**
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        if ($this->concurrencyKey === null || $this->concurrencyKey === '') {
+            return [];
+        }
+
+        return [
+            (new WithoutOverlapping($this->concurrencyKey))->shared(),
+        ];
     }
 }

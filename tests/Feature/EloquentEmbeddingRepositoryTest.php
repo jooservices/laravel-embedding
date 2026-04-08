@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace JOOservices\LaravelEmbedding\Tests\Feature;
 
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingRepository;
 use JOOservices\LaravelEmbedding\DTOs\ChunkData;
+use JOOservices\LaravelEmbedding\DTOs\EmbeddingTargetData;
 use JOOservices\LaravelEmbedding\DTOs\EmbeddingVectorData;
 use JOOservices\LaravelEmbedding\DTOs\StoredEmbeddingData;
 use JOOservices\LaravelEmbedding\Repositories\EloquentEmbeddingRepository;
@@ -21,7 +25,24 @@ final class EloquentEmbeddingRepositoryTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Schema::create('repository_targets', function (Blueprint $table) {
+            $table->id();
+            $table->timestamps();
+        });
         $this->repository = new EloquentEmbeddingRepository;
+    }
+
+    private function makeTarget(): Model
+    {
+        $target = new class extends Model
+        {
+            protected $table = 'repository_targets';
+
+            protected $guarded = [];
+        };
+        $target->save();
+
+        return $target;
     }
 
     private function makeVector(int $index = 0): EmbeddingVectorData
@@ -54,6 +75,8 @@ final class EloquentEmbeddingRepositoryTest extends TestCase
         $this->assertNotNull($result->id);
         $this->assertSame('ollama', $result->vector->provider);
         $this->assertSame($vector->chunk->contentHash, $result->vector->chunk->contentHash);
+        $this->assertNull($result->targetType);
+        $this->assertNull($result->targetId);
         $this->assertNull($result->embeddableType);
         $this->assertNull($result->embeddableId);
     }
@@ -80,6 +103,22 @@ final class EloquentEmbeddingRepositoryTest extends TestCase
         foreach ($results as $i => $result) {
             $this->assertSame($i, $result->vector->chunk->index);
         }
+    }
+
+    public function test_store_updates_existing_identity_instead_of_creating_duplicate(): void
+    {
+        $first = $this->makeVector(0);
+        $second = EmbeddingVectorData::make(
+            chunk: $first->chunk,
+            vector: [9.0, 8.0, 7.0],
+            provider: 'ollama',
+            model: 'nomic-embed-text',
+        );
+
+        $this->repository->store($first);
+        $this->repository->store($second);
+
+        $this->assertDatabaseCount('embeddings', 1);
     }
 
     // -------------------------------------------------------------------------
@@ -110,17 +149,74 @@ final class EloquentEmbeddingRepositoryTest extends TestCase
 
     public function test_delete_for_target_removes_associated_records(): void
     {
-        // Store with no target first to confirm deleteForTarget is specific.
-        $this->repository->store($this->makeVector(0));
+        $target = $this->makeTarget();
+        $this->repository->store($this->makeVector(0), $target);
         $this->repository->store($this->makeVector(1));
 
-        $count = $this->repository->deleteForTarget(new class extends \Illuminate\Database\Eloquent\Model
-        {
-            protected $table = 'embeddings';
-        });
+        $count = $this->repository->deleteForTarget($target);
 
-        // Since no records were stored with a real morph, 0 should be deleted.
-        $this->assertSame(0, $count);
+        $this->assertSame(1, $count);
+        $this->assertDatabaseCount('embeddings', 1);
+    }
+
+    public function test_store_supports_non_eloquent_target_references(): void
+    {
+        $target = new EmbeddingTargetData('document', 'doc-123', 'kb');
+
+        $stored = $this->repository->store($this->makeVector(0), $target, ['source' => 'external']);
+
+        $this->assertSame('document', $stored->targetType);
+        $this->assertSame('doc-123', $stored->targetId);
+        $this->assertSame('kb', $stored->namespace);
+    }
+
+    public function test_replace_for_target_replaces_existing_embedding_set(): void
+    {
+        $target = $this->makeTarget();
+
+        $this->repository->store($this->makeVector(0), $target);
+        $this->repository->store($this->makeVector(1), $target);
+
+        $replacement = [$this->makeVector(2)];
+        $this->repository->replaceForTarget($replacement, $target, ['source' => 'replacement']);
+
+        $this->assertDatabaseCount('embeddings', 1);
+        $stored = $this->repository->findByHash($replacement[0]->chunk->contentHash);
+        $this->assertNotNull($stored);
+        $this->assertSame('replacement', $stored->meta['source']);
+    }
+
+    public function test_find_for_target_returns_ordered_results_with_filters(): void
+    {
+        $target = new EmbeddingTargetData('document', 'doc-456', 'kb');
+        $this->repository->store($this->makeVector(1), $target, ['lang' => 'en']);
+        $this->repository->store($this->makeVector(0), $target, ['lang' => 'en']);
+        $this->repository->store($this->makeVector(0), new EmbeddingTargetData('document', 'doc-789', 'kb'));
+
+        $results = $this->repository->findForTarget($target, [
+            'provider' => 'ollama',
+            'model' => 'nomic-embed-text',
+            'namespace' => 'kb',
+        ]);
+
+        $this->assertCount(2, $results);
+        $this->assertSame([0, 1], $results->map(fn (StoredEmbeddingData $result): int => $result->vector->chunk->index)->all());
+    }
+
+    public function test_has_matching_content_hashes_returns_true_for_identical_target_set(): void
+    {
+        $target = new EmbeddingTargetData('document', 'doc-999', 'kb');
+        $vectors = [$this->makeVector(0), $this->makeVector(1)];
+        $this->repository->storeBatch($vectors, $target);
+
+        $result = $this->repository->hasMatchingContentHashes(
+            $target,
+            array_map(static fn (EmbeddingVectorData $vector): string => $vector->chunk->contentHash, $vectors),
+            'ollama',
+            'nomic-embed-text',
+        );
+
+        $this->assertTrue($result);
     }
 
     // -------------------------------------------------------------------------

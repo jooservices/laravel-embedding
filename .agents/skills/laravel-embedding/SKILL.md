@@ -8,7 +8,7 @@ This Skill instructs AI agents on how to natively utilize the `jooservices/larav
 
 ## 1. Architectural Role
 
-The `jooservices/laravel-embedding` package sits at the persistence and extraction layer. It translates raw text into mathematical vectors via Ollama/OpenAI, and stores them in PostgreSQL using the `pgvector` extension.
+The `jooservices/laravel-embedding` package sits at the persistence and extraction layer. It translates raw text into mathematical vectors via Ollama, and stores them in PostgreSQL using the `pgvector` extension when similarity search is required.
 
 You **Must Not** try to rebuild chunking algorithms or `pgvector` SQL queries manually when this package is installed. Rely inherently on its Facades and Models!
 
@@ -84,4 +84,4 @@ class WikiPage extends Model
 }
 ```
 
-By following this skill, your implementation will perfectly align with the intended Enterprise Architecture constraints designed for `joo-services`.
+Current runtime support is Ollama-first. OpenAI configuration remains reserved for a future release and must not be presented as supported runtime behavior.

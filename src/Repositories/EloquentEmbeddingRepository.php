@@ -4,28 +4,43 @@ declare(strict_types=1);
 
 namespace JOOservices\LaravelEmbedding\Repositories;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingRepository;
+use JOOservices\LaravelEmbedding\DTOs\ChunkData;
+use JOOservices\LaravelEmbedding\DTOs\EmbeddingTargetData;
 use JOOservices\LaravelEmbedding\DTOs\EmbeddingVectorData;
 use JOOservices\LaravelEmbedding\DTOs\StoredEmbeddingData;
 use JOOservices\LaravelEmbedding\Models\Embedding;
+use JOOservices\LaravelEmbedding\Support\PgvectorSimilarityQuery;
+use UnexpectedValueException;
 
 final class EloquentEmbeddingRepository implements EmbeddingRepository
 {
-    public function store(EmbeddingVectorData $vector, ?Model $target = null, array $meta = []): StoredEmbeddingData
+    public function store(EmbeddingVectorData $vector, Model|EmbeddingTargetData|null $target = null, array $meta = []): StoredEmbeddingData
     {
-        $record = Embedding::create([
-            'embeddable_type' => $target?->getMorphClass(),
-            'embeddable_id' => $target?->getKey(),
-            'provider' => $vector->provider,
-            'model' => $vector->model,
-            'dimension' => $vector->dimension,
-            'chunk_index' => $vector->chunk->index,
-            'content' => $vector->chunk->content,
-            'content_hash' => $vector->chunk->contentHash,
-            'embedding' => $vector->vector,
-            'meta' => empty($meta) ? null : $meta,
-        ]);
+        $targetData = $this->normalizeTarget($target);
+
+        $record = Embedding::query()->updateOrCreate(
+            $this->identityAttributes($vector, $targetData),
+            [
+                'embeddable_type' => $target instanceof Model ? $target->getMorphClass() : null,
+                'embeddable_id' => $target instanceof Model ? $target->getKey() : null,
+                'target_type' => $targetData?->type,
+                'target_id' => $targetData?->id === null ? null : (string) $targetData->id,
+                'provider' => $vector->provider,
+                'model' => $vector->model,
+                'dimension' => $vector->dimension,
+                'chunk_index' => $vector->chunk->index,
+                'content' => $vector->chunk->content,
+                'content_hash' => $vector->chunk->contentHash,
+                'embedding' => $vector->vector,
+                'namespace' => $targetData?->namespace,
+                'meta' => empty($meta) ? null : $meta,
+            ],
+        );
 
         return $this->toDto($record, $vector);
     }
@@ -34,7 +49,7 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
      * @param  EmbeddingVectorData[]  $vectors
      * @return StoredEmbeddingData[]
      */
-    public function storeBatch(array $vectors, ?Model $target = null, array $meta = []): array
+    public function storeBatch(array $vectors, Model|EmbeddingTargetData|null $target = null, array $meta = []): array
     {
         return array_map(
             fn (EmbeddingVectorData $vector): StoredEmbeddingData => $this->store($vector, $target, $meta),
@@ -42,12 +57,66 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
         );
     }
 
-    public function deleteForTarget(Model $target): int
+    /**
+     * @param  EmbeddingVectorData[]  $vectors
+     * @return StoredEmbeddingData[]
+     */
+    public function replaceForTarget(array $vectors, Model|EmbeddingTargetData $target, array $meta = []): array
     {
-        return Embedding::query()
-            ->where('embeddable_type', $target->getMorphClass())
-            ->where('embeddable_id', $target->getKey())
-            ->delete();
+        $connectionName = (new Embedding)->getConnectionName();
+
+        /** @var StoredEmbeddingData[] $stored */
+        $stored = DB::connection($connectionName)->transaction(function () use ($vectors, $target, $meta): array {
+            $this->deleteForTarget($target);
+
+            return $this->storeBatch($vectors, $target, $meta);
+        });
+
+        return $stored;
+    }
+
+    public function deleteForTarget(Model|EmbeddingTargetData $target): int
+    {
+        return $this->applyTargetFilters(Embedding::query(), $this->normalizeTarget($target))->delete();
+    }
+
+    public function findForTarget(Model|EmbeddingTargetData $target, array $filters = []): Collection
+    {
+        $query = $this->applyFilters(
+            $this->applyTargetFilters(Embedding::query(), $this->normalizeTarget($target)),
+            $filters,
+        )->orderBy('chunk_index');
+
+        return $query->get()->map(fn (Embedding $record): StoredEmbeddingData => $this->recordToDto($record));
+    }
+
+    public function hasMatchingContentHashes(
+        Model|EmbeddingTargetData $target,
+        array $contentHashes,
+        string $provider,
+        string $model,
+    ): bool {
+        $contentHashes = array_values(array_unique($contentHashes));
+        if ($contentHashes === []) {
+            return false;
+        }
+
+        $storedHashes = $this->applyTargetFilters(Embedding::query(), $this->normalizeTarget($target))
+            ->where('provider', $provider)
+            ->where('model', $model)
+            ->orderBy('chunk_index')
+            ->get()
+            ->pluck('content_hash')
+            ->map(static function (mixed $hash): string {
+                if (! is_string($hash)) {
+                    throw new UnexpectedValueException('Stored content hashes must be strings.');
+                }
+
+                return $hash;
+            })
+            ->all();
+
+        return $storedHashes === $contentHashes;
     }
 
     public function findByHash(string $contentHash): ?StoredEmbeddingData
@@ -62,7 +131,7 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
 
         // Reconstruct the ChunkData and EmbeddingVectorData from the record
         // so we can return a fully typed DTO without leaking the Eloquent model.
-        $chunk = \JOOservices\LaravelEmbedding\DTOs\ChunkData::make(
+        $chunk = ChunkData::make(
             content: $record->content,
             index: $record->chunk_index,
             startOffset: 0,
@@ -79,29 +148,12 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
         return $this->toDto($record, $vector);
     }
 
-    public function searchSimilar(array $embedding, int $limit = 5): \Illuminate\Support\Collection
+    public function searchSimilar(array $embedding, int $limit = 5, array $filters = []): Collection
     {
-        return Embedding::query()
-            ->nearestTo($embedding)
+        return $this->applyFilters(PgvectorSimilarityQuery::apply(Embedding::query(), $embedding), $filters)
             ->limit($limit)
             ->get()
-            ->map(function (Embedding $record): StoredEmbeddingData {
-                $chunk = \JOOservices\LaravelEmbedding\DTOs\ChunkData::make(
-                    content: $record->content,
-                    index: $record->chunk_index,
-                    startOffset: 0,
-                    endOffset: mb_strlen($record->content),
-                );
-
-                $vector = EmbeddingVectorData::make(
-                    chunk: $chunk,
-                    vector: $record->embedding,
-                    provider: $record->provider,
-                    model: $record->model,
-                );
-
-                return $this->toDto($record, $vector);
-            });
+            ->map(fn (Embedding $record): StoredEmbeddingData => $this->recordToDto($record));
     }
 
     /**
@@ -112,11 +164,110 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
         return new StoredEmbeddingData(
             id: $record->getKey(),
             vector: $vector,
+            targetType: $record->target_type,
+            targetId: $record->target_id,
             embeddableType: $record->embeddable_type,
             embeddableId: $record->embeddable_id,
+            namespace: $record->namespace,
             meta: $record->meta ?? [],
             createdAt: $record->created_at,
             updatedAt: $record->updated_at,
         );
+    }
+
+    private function recordToDto(Embedding $record): StoredEmbeddingData
+    {
+        $chunk = ChunkData::make(
+            content: $record->content,
+            index: $record->chunk_index,
+            startOffset: 0,
+            endOffset: mb_strlen($record->content),
+        );
+
+        $vector = EmbeddingVectorData::make(
+            chunk: $chunk,
+            vector: $record->embedding,
+            provider: $record->provider,
+            model: $record->model,
+        );
+
+        return $this->toDto($record, $vector);
+    }
+
+    private function identityAttributes(EmbeddingVectorData $vector, ?EmbeddingTargetData $target): array
+    {
+        return [
+            'target_type' => $target?->type,
+            'target_id' => $target?->id === null ? null : (string) $target->id,
+            'namespace' => $target?->namespace,
+            'provider' => $vector->provider,
+            'model' => $vector->model,
+            'chunk_index' => $vector->chunk->index,
+            'content_hash' => $vector->chunk->contentHash,
+        ];
+    }
+
+    private function normalizeTarget(Model|EmbeddingTargetData|null $target): ?EmbeddingTargetData
+    {
+        if ($target instanceof EmbeddingTargetData) {
+            return $target;
+        }
+
+        if ($target instanceof Model) {
+            return EmbeddingTargetData::fromModel($target);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function applyFilters(
+        Builder $query,
+        array $filters,
+    ): Builder {
+        if (isset($filters['target'])) {
+            $query = $this->applyTargetFilters($query, $this->normalizeTarget($filters['target']));
+        }
+
+        if (isset($filters['provider']) && is_string($filters['provider'])) {
+            $query->forProvider($filters['provider']);
+        }
+
+        if (isset($filters['model']) && is_string($filters['model'])) {
+            $query->forModel($filters['model']);
+        }
+
+        if (isset($filters['namespace']) && is_string($filters['namespace'])) {
+            $query->inNamespace($filters['namespace']);
+        }
+
+        if (isset($filters['meta']) && is_array($filters['meta'])) {
+            foreach ($filters['meta'] as $key => $value) {
+                if (is_string($key)) {
+                    $query->withMetaFilter($key, $value);
+                }
+            }
+        }
+
+        return $query;
+    }
+
+    private function applyTargetFilters(
+        Builder $query,
+        ?EmbeddingTargetData $target,
+    ): Builder {
+        if ($target === null || $target->type === null) {
+            return $query->whereNull('target_type')->whereNull('target_id');
+        }
+
+        $query->forTarget($target->type, $target->id);
+
+        if ($target->namespace !== null) {
+            $query->inNamespace($target->namespace);
+        }
+
+        return $query;
     }
 }

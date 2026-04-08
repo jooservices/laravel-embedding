@@ -1,4 +1,4 @@
-# Installation & Setup
+# JOOservices Laravel Embedding Library Installation & Setup
 
 Require the package via Composer:
 
@@ -28,6 +28,18 @@ EMBEDDING_CHUNK_OVERLAP=150
 
 EMBEDDING_DB_ENABLED=true
 EMBEDDING_DB_CONNECTION=pgsql
+EMBEDDING_PGVECTOR_ENSURE_EXTENSION=false
 ```
 
-> **Warning:** To exploit full Vector Search (Retrieval), your `EMBEDDING_DB_CONNECTION` must point to a PostgreSQL connection running the `pgvector` extension.
+## Support Matrix
+
+- Ollama embedding generation: supported
+- PostgreSQL + `pgvector` similarity search: supported
+- SQLite/MySQL persistence without vector search: supported for storage only
+- OpenAI provider: reserved for a future release, not supported at runtime yet
+
+## PostgreSQL Requirements
+
+To use nearest-neighbour search, `EMBEDDING_DB_CONNECTION` must point to a PostgreSQL connection with the `pgvector` extension available.
+
+The package migration will only attempt `CREATE EXTENSION vector` when `EMBEDDING_PGVECTOR_ENSURE_EXTENSION=true`. Leave it `false` when extension management is handled outside Laravel migrations, which is common in managed PostgreSQL environments.

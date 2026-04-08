@@ -19,11 +19,20 @@ final readonly class StoredEmbeddingData
         /** The full vector data that was stored. */
         public EmbeddingVectorData $vector,
 
+        /** Package-level target type, if any. */
+        public ?string $targetType,
+
+        /** Package-level target ID, if any. */
+        public int|string|null $targetId,
+
         /** Polymorphic target type, if any. */
         public ?string $embeddableType,
 
         /** Polymorphic target ID, if any. */
         public int|string|null $embeddableId,
+
+        /** Optional package-level search namespace. */
+        public ?string $namespace,
 
         /** Arbitrary metadata stored alongside the embedding. */
         public array $meta,

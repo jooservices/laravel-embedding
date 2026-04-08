@@ -1,7 +1,6 @@
 {
     "name": "jooservices/laravel-embedding",
     "description": "A reusable Laravel package for text chunking, embedding generation, and optional vector persistence.",
-    "version": "1.0.0",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -23,7 +22,7 @@
         "illuminate/support": "^11.0|^12.0",
         "illuminate/database": "^11.0|^12.0",
         "illuminate/http": "^11.0|^12.0",
-        "jooservices/dto": "*"
+        "jooservices/dto": "^1.0.3"
     },
     "require-dev": {
         "captainhook/captainhook": "^5.23",

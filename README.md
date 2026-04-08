@@ -1,46 +1,64 @@
-# JOOservices Laravel Embedding
+# JOOservices Laravel Embedding Library
 
-A production-grade, enterprise-ready vector embedding and chunking package for Laravel 11+.
-Designed to empower Retrieval-Augmented Generation (RAG) applications using Ollama (and soon OpenAI) with robust Background Queueing, Smart Text Chunking, and native PostgreSQL `pgvector` nearest-neighbor search.
+A Laravel package for text chunking, Ollama-based embedding generation, optional persistence, and PostgreSQL `pgvector` similarity search.
+
+Current runtime support is intentionally narrow:
+
+- Ollama embedding generation is supported.
+- PostgreSQL with `pgvector` is required for similarity search.
+- SQLite/MySQL can persist vectors, but they do not provide vector search through this package.
+- OpenAI configuration is reserved for a future release and is not supported at runtime yet.
 
 ## Key Features
 
-1. **Smart Context Chunking:** Word-boundary protection to prevent semantic clipping. Includes `DefaultChunker` and `MarkdownChunker` for paragraph/heading aware splitting.
-2. **Native Vector Search:** Seamlessly uses `pgvector` distance operators (`<=>`) over indexed columns for lightning-fast retrieval. Fallback to `json` on SQLite/MySQL.
-3. **Background Processing:** Ships with Laravel Jobs to dispatch massive documents asynchronously without blocking the main HTTP request thread.
-4. **Lifecycle Syncing:** Attaching `HasEmbeddings` trait ensures embeddings are automatically wiped / soft-deleted when their parent Eloquent model is destroyed.
-5. **Dynamic Configuration:** Easily inject context variables (`chunk_size`, `chunk_overlap`) at runtime to override `.env` limits on a per-request basis.
+1. **Smart Context Chunking:** Includes `DefaultChunker`, `MarkdownChunker`, `SentenceChunker`, and `TokenBudgetChunker`.
+2. **Native PostgreSQL Vector Search:** Uses `pgvector` cosine-distance operators (`<=>`) when your embedding store is PostgreSQL.
+3. **Background Processing:** Ships with queue-aware jobs plus configurable queue connection, queue name, retry/backoff, timeout, and overlap protection.
+4. **Safer Re-Embedding:** Can skip unchanged targets and replace persisted target sets only after successful generation.
+5. **Flexible Targeting:** Supports Eloquent-backed targets and non-Eloquent `target_type` / `target_id` references.
+6. **Search Helpers:** Supports metadata-aware filtering and a thin `EmbeddingSearch` service.
 
 ## Quick Start
 
 Please read the complete documentation available in the `docs/` directory:
 
-- [Installation & Setup](docs/installation.md)
-- [Managing DB / pgvector](docs/database.md)
-- [Using Chunks & Enqueuing](docs/usage.md)
-- [Dynamic Runtime Context](docs/context.md)
+- [Installation & Setup](docs/01-getting-started/installation.md)
+- [Usage & Asynchronous Processing](docs/02-user-guide/01-chunking-and-queues.md)
+- [Dynamic Runtime Context](docs/03-examples/runtime-context.md)
 
 ## Basic Usage
 
 ```php
 use JOOservices\LaravelEmbedding\Facades\Embedding;
+use JOOservices\LaravelEmbedding\Facades\EmbeddingSearch;
 
 // 1. Single text raw vector
 $vector = Embedding::embedText('Who is the CEO of Apple?');
 
-// 2. Heavy PDF Chunk & Embed
+// 2. Chunk, embed, and persist a non-Eloquent target
 Embedding::chunkAndEmbed($hugePdfContent, [
-    'target' => $documentModel, // Polymorphic binding
-    'author' => 'System'        // Saved to Meta JSON
+    'target_type' => 'document',
+    'target_id' => 'annual-report-2024',
+    'namespace' => 'finance',
+    'skip_if_unchanged' => true,
+    'author' => 'System',
 ]);
 
-// 3. Search & Retrieve (pgvector)
-$searchVector = Embedding::embedText('Company leadership')->vector;
+// 3. Search & Retrieve (PostgreSQL + pgvector only)
+$results = EmbeddingSearch::similarToText('Company leadership', 5, [
+    'namespace' => 'finance',
+    'meta' => ['author' => 'System'],
+]);
+```
 
-$results = \JOOservices\LaravelEmbedding\Models\Embedding::query()
-    ->nearestTo($searchVector)
-    ->limit(5)
-    ->get();
+## PostgreSQL Notes
+
+This package does not auto-create a pgvector ANN index because index strategy depends on your chosen model dimensions and operational preferences. Treat extension enablement and index creation as deployment decisions in the host application.
+
+If you want the package migration to attempt `CREATE EXTENSION vector`, enable:
+
+```env
+EMBEDDING_PGVECTOR_ENSURE_EXTENSION=true
 ```
 
 ## AI Agents & Development

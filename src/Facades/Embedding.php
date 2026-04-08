@@ -15,6 +15,7 @@ use JOOservices\LaravelEmbedding\DTOs\EmbeddingVectorData;
  * @method static EmbeddingVectorData embedText(string $text, array $context = [])
  * @method static EmbeddingBatchResultData embedBatch(array $texts, array $context = [])
  * @method static ChunkData[] chunkText(string $text, array $context = [])
+ * @method static array chunkPreview(string $text, array $context = [])
  * @method static EmbeddingBatchResultData chunkAndEmbed(string $text, array $context = [])
  * @method static \Illuminate\Foundation\Bus\PendingDispatch queueBatch(string $text, array $context = [])
  *

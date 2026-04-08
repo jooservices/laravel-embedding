@@ -207,4 +207,14 @@ final class EmbeddingManagerTest extends TestCase
 
         $this->assertGreaterThan(1, count($chunks));
     }
+
+    public function test_chunk_preview_returns_debug_summary(): void
+    {
+        $manager = $this->app->make(EmbeddingManager::class);
+        $preview = $manager->chunkPreview(str_repeat('preview ', 20), ['chunk_size' => 20, 'chunk_overlap' => 0]);
+
+        $this->assertNotEmpty($preview);
+        $this->assertArrayHasKey('preview', $preview[0]);
+        $this->assertArrayHasKey('content_hash', $preview[0]);
+    }
 }

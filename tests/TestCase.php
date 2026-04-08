@@ -44,6 +44,14 @@ abstract class TestCase extends BaseTestCase
         // Chunking defaults.
         $app['config']->set('embedding.chunking.chunk_size', 100);
         $app['config']->set('embedding.chunking.chunk_overlap', 10);
+        $app['config']->set('embedding.batching.size', 0);
+        $app['config']->set('embedding.queue', [
+            'connection' => null,
+            'name' => null,
+            'tries' => 1,
+            'backoff' => 0,
+            'timeout' => 120,
+        ]);
 
         // Ollama defaults.
         $app['config']->set('embedding.default_provider', 'ollama');

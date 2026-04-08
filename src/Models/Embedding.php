@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use JOOservices\LaravelEmbedding\Support\PgvectorSimilarityQuery;
 use RuntimeException;
 
 /**
@@ -19,6 +20,8 @@ use RuntimeException;
  * @property int $id
  * @property string|null $embeddable_type
  * @property int|string|null $embeddable_id
+ * @property string|null $target_type
+ * @property int|string|null $target_id
  * @property string $provider
  * @property string $model
  * @property int $dimension
@@ -26,6 +29,7 @@ use RuntimeException;
  * @property string $content
  * @property string $content_hash
  * @property array $embedding
+ * @property string|null $namespace
  * @property array|null $meta
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
@@ -38,6 +42,8 @@ final class Embedding extends Model
     protected $fillable = [
         'embeddable_type',
         'embeddable_id',
+        'target_type',
+        'target_id',
         'provider',
         'model',
         'dimension',
@@ -45,6 +51,7 @@ final class Embedding extends Model
         'content',
         'content_hash',
         'embedding',
+        'namespace',
         'meta',
     ];
 
@@ -52,6 +59,7 @@ final class Embedding extends Model
     protected $casts = [
         'dimension' => 'integer',
         'chunk_index' => 'integer',
+        'target_id' => 'string',
         'embedding' => 'array',
         'meta' => 'array',
     ];
@@ -89,15 +97,55 @@ final class Embedding extends Model
      */
     public function scopeNearestTo(Builder $query, array $vector): Builder
     {
-        $connection = $query->getConnection();
+        return PgvectorSimilarityQuery::apply($query, $vector);
+    }
 
-        if ($connection->getDriverName() === 'pgsql') {
-            $vectorString = '['.implode(',', $vector).']';
+    public function scopeForTarget(Builder $query, string $targetType, int|string|null $targetId = null): Builder
+    {
+        $query->where('target_type', $targetType);
 
-            return $query->selectRaw('*, embedding <=> ? AS distance', [$vectorString])
-                ->orderByRaw('embedding <=> ?', [$vectorString]);
+        if ($targetId !== null) {
+            $query->where('target_id', (string) $targetId);
         }
 
-        throw new RuntimeException('Vector search is only supported on a PostgreSQL database with the pgvector extension.');
+        return $query;
+    }
+
+    public function scopeForProvider(Builder $query, string $provider): Builder
+    {
+        return $query->where('provider', $provider);
+    }
+
+    public function scopeForModel(Builder $query, string $model): Builder
+    {
+        return $query->where('model', $model);
+    }
+
+    public function scopeInNamespace(Builder $query, string $namespace): Builder
+    {
+        return $query->where('namespace', $namespace);
+    }
+
+    public function scopeWithMetaFilter(Builder $query, string $key, mixed $value): Builder
+    {
+        $driver = $query->getConnection()->getDriverName();
+
+        if ($driver === 'pgsql') {
+            if ($value === null) {
+                return $query->whereRaw('meta ->> ? IS NULL', [$key]);
+            }
+
+            if (is_scalar($value)) {
+                return $query->whereRaw('meta ->> ? = ?', [$key, (string) $value]);
+            }
+
+            throw new RuntimeException('Metadata filtering only supports scalar or null values.');
+        }
+
+        if (in_array($driver, ['sqlite', 'mysql'], true)) {
+            return $query->where("meta->{$key}", $value);
+        }
+
+        throw new RuntimeException('Metadata filtering is not supported on the configured database driver.');
     }
 }

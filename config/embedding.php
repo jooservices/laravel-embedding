@@ -10,7 +10,10 @@ return [
     |--------------------------------------------------------------------------
     |
     | This option controls which embedding provider is used as default.
-    | Supported: "ollama", "openai"
+    | Supported in runtime today: "ollama"
+    |
+    | The "openai" key remains reserved in config for future implementation,
+    | but selecting it today will throw an explicit unsupported-provider error.
     |
     */
     'default_provider' => env('EMBEDDING_PROVIDER', 'ollama'),
@@ -34,7 +37,7 @@ return [
         ],
 
         'openai' => [
-            // Placeholder for future OpenAI implementation.
+            // Reserved for a future implementation. Not supported at runtime yet.
             'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
             'api_key' => env('OPENAI_API_KEY'),
             'model' => env('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small'),
@@ -61,6 +64,18 @@ return [
         'chunk_overlap' => (int) env('EMBEDDING_CHUNK_OVERLAP', 100),
     ],
 
+    'batching' => [
+        'size' => (int) env('EMBEDDING_BATCH_SIZE', 0),
+    ],
+
+    'queue' => [
+        'connection' => env('EMBEDDING_QUEUE_CONNECTION'),
+        'name' => env('EMBEDDING_QUEUE_NAME'),
+        'tries' => (int) env('EMBEDDING_QUEUE_TRIES', 1),
+        'backoff' => (int) env('EMBEDDING_QUEUE_BACKOFF', 0),
+        'timeout' => (int) env('EMBEDDING_QUEUE_TIMEOUT', 120),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Database / Persistence
@@ -69,15 +84,18 @@ return [
     | When enabled, generated embeddings will be persisted to the database.
     | You may configure which connection and table name to use.
     |
-    | Note: The default connection is "pgsql" because the package is designed
-    | with PostgreSQL (and optionally pgvector) as the primary persistence
-    | target. Set to "sqlite" for testing or "mongodb" for document storage.
+    | Note: PostgreSQL with pgvector is the only supported search backend.
+    | Other database drivers may store embeddings, but they do not provide
+    | nearest-neighbour vector search through this package.
     |
     */
     'database' => [
         'enabled' => (bool) env('EMBEDDING_DB_ENABLED', true),
         'connection' => env('EMBEDDING_DB_CONNECTION', 'pgsql'),
         'table' => env('EMBEDDING_TABLE', 'embeddings'),
+        'pgvector' => [
+            'ensure_extension' => (bool) env('EMBEDDING_PGVECTOR_ENSURE_EXTENSION', false),
+        ],
     ],
 
 ];

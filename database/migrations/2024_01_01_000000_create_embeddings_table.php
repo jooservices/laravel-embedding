@@ -26,7 +26,7 @@ return new class extends Migration
         $connection = Schema::connection($this->getConnection())->getConnection();
         $isPgsql = $connection->getDriverName() === 'pgsql';
 
-        if ($isPgsql) {
+        if ($isPgsql && (bool) config('embedding.database.pgvector.ensure_extension', false)) {
             $connection->statement('CREATE EXTENSION IF NOT EXISTS vector');
         }
 
@@ -36,6 +36,10 @@ return new class extends Migration
             // Polymorphic relationship: link embeddings to any Eloquent model.
             // Both fields are nullable to support purely text-based (non-model) embeddings.
             $table->nullableMorphs('embeddable');
+
+            // Package-level target reference for both Eloquent and non-Eloquent sources.
+            $table->string('target_type')->nullable();
+            $table->string('target_id')->nullable();
 
             // Provider and model metadata.
             $table->string('provider', 64);
@@ -53,22 +57,29 @@ return new class extends Migration
             // SHA-256 hash of `content` for fast deduplication / change detection.
             $table->char('content_hash', 64)->index();
 
-            // The embedding vector storage. Uses pgvector on Postgres, fallback to JSON
+            // PostgreSQL supports pgvector search.
+            // Other drivers may persist vectors, but not search them.
             if ($isPgsql) {
-                // Allows up to 4096 dimensions
                 $table->addColumn('vector', 'embedding');
             } else {
                 $table->json('embedding');
             }
+
+            $table->string('namespace')->nullable();
 
             // Arbitrary metadata (e.g., source file, language, tags).
             $table->json('meta')->nullable();
 
             $table->timestamps();
 
-            // Deduplication index: same content chunk for the same target should not
-            // be stored twice unless the hash changes.
-            $table->unique(['embeddable_type', 'embeddable_id', 'content_hash', 'chunk_index'], 'embeddings_dedup_unique');
+            $table->index(
+                ['embeddable_type', 'embeddable_id', 'provider', 'model', 'content_hash', 'chunk_index'],
+                'embeddings_identity_idx',
+            );
+            $table->index(
+                ['target_type', 'target_id', 'namespace', 'provider', 'model'],
+                'embeddings_target_lookup_idx',
+            );
         });
     }
 

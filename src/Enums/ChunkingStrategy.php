@@ -25,6 +25,16 @@ enum ChunkingStrategy: string
     case Paragraph = 'paragraph';
 
     /**
+     * Paragraph-aware chunking for markdown-style content.
+     */
+    case Markdown = 'markdown';
+
+    /**
+     * Approximate token-budget chunking using whitespace tokens.
+     */
+    case Token = 'token';
+
+    /**
      * Resolve from config value safely.
      */
     public static function fromConfig(string $value): self
