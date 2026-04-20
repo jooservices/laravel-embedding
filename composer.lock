@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "40e1cc673cbdc3b43a9e5aaa2e931f47",
+    "content-hash": "80badf431c81ad4361c60dd0a734d0c3",
     "packages": [
         {
             "name": "brick/math",
@@ -1055,16 +1055,16 @@
         },
         {
             "name": "jooservices/dto",
-            "version": "1.0.3",
+            "version": "1.0.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/jooservices/dto.git",
-                "reference": "70945568453e280307b5dad2880c0b47c5b0eeb8"
+                "reference": "df13dcf7ddac844925e0a2d7131b89f04c1eabf2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/jooservices/dto/zipball/70945568453e280307b5dad2880c0b47c5b0eeb8",
-                "reference": "70945568453e280307b5dad2880c0b47c5b0eeb8",
+                "url": "https://api.github.com/repos/jooservices/dto/zipball/df13dcf7ddac844925e0a2d7131b89f04c1eabf2",
+                "reference": "df13dcf7ddac844925e0a2d7131b89f04c1eabf2",
                 "shasum": ""
             },
             "require": {
@@ -1111,9 +1111,9 @@
             ],
             "support": {
                 "issues": "https://github.com/jooservices/dto/issues",
-                "source": "https://github.com/jooservices/dto/tree/v1.0.3"
+                "source": "https://github.com/jooservices/dto/tree/v1.0.4"
             },
-            "time": "2026-04-02T05:35:08+00:00"
+            "time": "2026-04-15T10:03:37+00:00"
         },
         {
             "name": "laravel/framework",
