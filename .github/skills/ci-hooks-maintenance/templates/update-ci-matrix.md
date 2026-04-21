@@ -16,4 +16,4 @@ Update CI tool matrix without breaking build policy.
 
 - CI workflow syntax is valid.
 - All listed tools are executable in the project.
-- Pipeline behavior is intentional and documented.
+- CI behavior is intentional and documented.

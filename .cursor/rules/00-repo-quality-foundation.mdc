@@ -1,10 +1,10 @@
 ---
-description: Baseline repository rules for jooservices/dto
+description: Baseline repository rules for jooservices/laravel-embedding
 globs: ["**/*"]
 alwaysApply: true
 ---
 
-Follow [AGENTS.md](/Users/vietvu/Sites/JOOservices/dto/AGENTS.md) as the repository-wide policy.
+Follow [AGENTS.md](/Users/vietvu/Sites/JOOservices/laravel-embedding/AGENTS.md) as the repository-wide policy.
 
 Focus on:
 

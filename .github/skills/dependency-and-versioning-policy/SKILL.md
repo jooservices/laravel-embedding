@@ -11,8 +11,8 @@ This skill helps agents stay conservative about dependencies and package version
 
 ## Dependency policy
 
-- The package currently has no third-party runtime dependencies beyond PHP itself
-- Prefer keeping runtime dependencies at zero unless there is a strong package-level justification
+- The package keeps runtime dependencies small and Laravel-package appropriate
+- Prefer existing Laravel components and package-local code before adding runtime dependencies
 - New dev dependencies should support the existing contributor workflow and CI
 - Dependency changes should trigger security, CI, and documentation review
 
@@ -25,12 +25,12 @@ This skill helps agents stay conservative about dependencies and package version
   - internal maintenance without public contract change
 - Minor-style change:
   - additive user-visible capability
-  - new supported attribute behavior
+  - new supported provider, chunker, search helper, or ingestion helper
   - new extension point without breaking old behavior
 - Major/breaking-style change:
   - changed public behavior
   - removed capability
-  - changed validation or casting expectations in incompatible ways
+  - changed persisted schema, queue semantics, or search behavior in incompatible ways
 
 ## Review checklist
 

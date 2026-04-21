@@ -1,6 +1,6 @@
 ---
 name: php-package-development
-description: "Use when: developing or maintaining this jooservices/dto PHP package; adding attributes, casters, validators, transformers, schema generators; fixing hydration or normalization bugs; and shipping package changes with tests, docs, hooks, and CI in mind."
+description: "Use when: developing or maintaining this Laravel embedding PHP package; adding chunkers, providers, search/persistence behavior, queue flows, ingestion helpers, or fixing package bugs with tests and docs."
 ---
 
 # PHP Package Development Skill
@@ -9,10 +9,10 @@ This skill standardizes how contributors work in this repository.
 
 ## Quick Start
 
-1. Pick the change type (attribute, caster, validator, transformer, bugfix).
-2. Implement minimal change in the correct `src/` module.
-3. Add tests in mirrored `tests/Unit/` paths.
-4. Add integration test when behavior crosses Engine/Hydrator/Normalizer boundaries.
+1. Pick the change type: chunking, provider, persistence, search, queueing, ingestion, docs, or bugfix.
+2. Implement the minimal change in the correct `src/` module.
+3. Add unit tests for isolated logic.
+4. Add feature tests when behavior crosses Laravel container, Eloquent, facades, migrations, or queue boundaries.
 5. Run `composer lint` and `composer test`.
 6. If style fails, run `composer lint:fix`, then rerun lint and tests.
 7. Finalize with a Conventional Commit message.
@@ -20,130 +20,76 @@ This skill standardizes how contributors work in this repository.
 ## Scope
 
 Use this workflow for:
+
 - Feature development inside `src/`
 - Bug fixes with regression tests
-- Extension points: attributes, casters, validators, transformers, schema
+- Provider, chunker, repository, search, ingestion, or queue behavior
 - PR hardening before merge
 
 Do not use this skill for:
+
 - Non-PHP infrastructure work unrelated to package behavior
 - Broad refactors without tests and behavior constraints
 - Release management outside repository CI/release workflows
 
-## Prerequisites
-
-- PHP 8.5+ and Composer 2 installed
-- Dependencies installed with `composer install`
-- Git hooks installed through CaptainHook (`post-install-cmd` / `post-update-cmd`)
-- `gitleaks` installed locally to pass pre-commit and pre-push secret scans
-
 ## Repository Truth
 
-- Runtime requirement: PHP >= 8.5 (`composer.json`)
-- Core commands (`composer.json`):
+- Runtime requirement: PHP 8.5+ (`composer.json`)
+- Core commands:
   - `composer lint`
   - `composer lint:all`
   - `composer lint:fix`
   - `composer test`
   - `composer test:coverage`
-- Git hooks (`captainhook.json`): commit message regex, pre-commit linting, gitleaks scan, pre-push tests.
-- CI gates (`.github/workflows/ci.yml`): security, lint matrix, tests + 95% coverage threshold.
-- Runtime gaps and limits (`docs/11-risks-legacy-and-gaps.md`) must be treated as current behavior.
+- CI enforces at least 95% statement coverage
+- Supported runtime provider today: Ollama
+- Supported similarity search backend today: PostgreSQL with `pgvector`
 
 ## Module Map
 
-- `src/Attributes/`: declarative behavior via PHP attributes
-- `src/Casting/`: type conversion and caster registry
-- `src/Validation/`: validation rules and registry
-- `src/Hydration/`: mapping and constructor argument resolution
-- `src/Normalization/`: output shaping and transformer flow
-- `src/Meta/`: reflection metadata and caches
-- `src/Schema/`: JSON Schema and OpenAPI generation
+- `src/Contracts/`: extension boundaries
+- `src/DTOs/`: package data objects
+- `src/Services/Chunking/`: text splitting strategies
+- `src/Services/Providers/`: provider clients, adapters, response normalizers
+- `src/Services/Embedding/`: orchestration, ingestion, queues, batch tracking
+- `src/Repositories/`: persistence and search storage behavior
+- `src/Models/`: config-driven Eloquent models
+- `src/Jobs/`: background processing and batch lifecycle updates
+- `src/Support/`: focused query/database helpers
+- `src/Traits/`: host model integration helpers
 
 ## Test Decision Matrix
 
-- Add unit tests only when:
-   - Logic is fully isolated to one class/module
-   - No orchestration change in Engine/Hydrator/Normalizer
-- Add integration tests when any is true:
-   - Input mapping + validation + casting behavior changed end-to-end
-   - Normalization output contracts changed through transformer/serialization flow
-   - Context flags (validation, permissive mode, serialization options, wrapping) influence behavior
+- Add unit tests when logic is isolated to one class, helper, DTO, chunker, provider normalizer, or query helper.
+- Add feature tests when behavior crosses service provider bindings, facades, Eloquent persistence, queue jobs, migrations, or Laravel model traits.
+- Add docs examples when changing public APIs or operational behavior.
 
 ## Always-Follow Workflow
 
-1. Identify module and extension point under `src/`.
+1. Identify module and public behavior impact.
 2. Implement smallest possible change with strict typing and module boundaries.
-3. Add tests:
-   - Unit test in mirrored path under `tests/Unit/`
-   - Integration test in `tests/Integration/` if flow crosses Engine/Hydrator/Normalizer boundaries.
+3. Add or update tests in the right layer.
 4. Run quality gates locally:
    - `composer lint`
    - `composer test`
-5. If style issues exist, run `composer lint:fix`, then rerun lint + tests.
-6. If touching security-sensitive code or introducing new code paths, run secret and dependency checks as applicable.
-7. Check whether docs, examples, or release notes should change.
-8. Use Conventional Commits in commit message.
-
-## Command Map
-
-- Fast local gate: `composer lint`
-- Full local gate: `composer lint:all`
-- Auto-fix style: `composer lint:fix`
-- Test suite: `composer test`
-- Coverage run: `composer test:coverage`
-- CI-equivalent script: `composer ci`
+5. If style issues exist, run `composer lint:fix`, then rerun lint and tests.
+6. Check whether docs, examples, or release notes should change.
+7. Keep unsupported runtime surfaces documented honestly.
 
 ## Failure Playbook
 
-- `composer lint:pint` fails:
-   - Run `composer lint:pint:fix` or `composer lint:fix`
-   - Re-run `composer lint:pint`
-- `composer lint:phpcs` fails:
-   - Fix structural issues or run the approved fixer path where appropriate
-   - Re-run `composer lint:phpcs`
-- `composer lint:phpstan` fails:
-   - Fix type/signature issues first, avoid broad suppressions
-   - Re-run `composer lint:phpstan`
-- Coverage threshold fails:
-   - Add or strengthen tests until coverage is back at or above 95%
-- Pre-commit fails on `gitleaks`:
-   - Remove or rotate detected secret and replace with env/placeholder
-   - Re-stage and commit again
-- Pre-push fails on tests:
-   - Reproduce with `composer test`
-   - Add/fix tests and push after green
-
-## Security-At-Inception Rule
-
-When generating new first-party code, perform security scanning and fix discovered issues before finalizing changes.
-
-Minimum checks:
-- `composer audit`
-- Local secret scan via gitleaks hooks or manual gitleaks commands
-
-## Prompt Examples
-
-- "Add a new validator for IBAN format and include unit + integration tests"
-- "Implement a transformer for DateTimeImmutable RFC3339 output and update normalizer tests"
-- "Fix hydration bug for nullable enum casting with regression test"
-- "Add a property attribute that maps from nested key path and wire metadata support"
+- `composer lint:pint` fails: run `composer lint:pint:fix` or `composer lint:fix`, then rerun.
+- `composer lint:phpcs` fails: fix structural issues or use the approved fixer path.
+- `composer lint:phpstan` fails: fix type/signature issues before adding suppressions.
+- Coverage threshold fails: add or strengthen tests until coverage is back at or above 95%.
+- Provider docs drift: compare docs against service provider bindings and tests.
+- Queue docs drift: compare docs against `ProcessEmbeddingBatchJob`, `ProcessChunkJob`, and `EmbeddingBatchTracker`.
 
 ## Definition Of Done
 
-A change is done when all are true:
 - Correct module placement under `src/`
 - Tests added/updated and passing
-- Lint + static analysis passing
-- Coverage impact reviewed for behavior changes
-- No new secret/dependency security findings
+- Lint and static analysis passing
+- Coverage impact reviewed
 - Docs updated when behavior/API changes
-
-## PR Readiness Checklist
-
-- Scope is minimal and module boundaries respected
-- Unit/integration tests are sufficient for changed behavior
-- `composer lint` and `composer test` are green locally
-- Hooks pass (commit-msg, pre-commit, pre-push)
-- Commit messages follow Conventional Commits
-- Behavior changes are documented in docs when applicable
+- Unsupported features remain clearly marked as unsupported

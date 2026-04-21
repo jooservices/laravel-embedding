@@ -20,14 +20,14 @@ Fix a defect and prevent reintroduction with minimal, targeted tests.
 ## Impact Review
 
 - Which module owns the bug?
-- Does the bug affect hydration, normalization, validation, or casting?
-- Could fix affect backward compatibility of DTO behavior?
-- Is additional integration coverage needed for cross-module flow?
+- Does the bug affect chunking, provider calls, persistence, search, queues, or ingestion?
+- Could the fix affect backward compatibility of public package behavior?
+- Is additional feature coverage needed for Laravel container, Eloquent, facade, or queue flow?
 
 ## Test Placement Heuristic
 
 - Pure logic bug: mirrored unit test under `tests/Unit/`
-- Multi-component flow bug: integration test under `tests/Integration/`
+- Multi-component Laravel flow bug: feature test under `tests/Feature/`
 
 ## Local Checks
 

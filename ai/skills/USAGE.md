@@ -162,10 +162,12 @@ Recommended pattern:
   - CI
   - release
 - Say which surface is affected:
-  - hydration
-  - validation
-  - normalization
-  - schema
+  - chunking
+  - provider
+  - persistence
+  - search
+  - queues
+  - ingestion
   - docs
   - workflows
 - If behavior is changing, ask the agent to include:
@@ -176,13 +178,13 @@ Recommended pattern:
 
 ## When to be extra careful
 
-- Editing `Core/`
-- Changing validation timing or casting behavior
-- Changing normalization output
-- Changing schema output
+- Changing provider runtime support
+- Changing vector persistence or migration behavior
+- Changing PostgreSQL `pgvector` search behavior
+- Changing queue replacement, staged activation, or batch status behavior
 - Adding dependencies
 - Touching hooks, CI, release, or security workflows
-- Touching declared-but-not-fully-wired attributes
+- Touching reserved features such as OpenAI or image embeddings
 
 ## Maintenance rule
 

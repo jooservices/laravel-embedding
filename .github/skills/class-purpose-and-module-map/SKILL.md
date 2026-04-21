@@ -3,101 +3,77 @@ name: class-purpose-and-module-map
 description: "Use when: orienting inside the codebase; understanding which class or module owns a behavior; deciding where to implement a change; and preventing cross-layer edits that belong elsewhere."
 ---
 
-# Class Purpose and Module Map Skill
+# Class Purpose And Module Map Skill
 
-## Purpose
+This skill helps agents understand what each major class and module is for before editing.
 
-This skill helps agents understand what each major class and module is for before they edit anything.
+## Public Foundation
 
-## Public foundation classes
+### `Contracts/*`
 
-### `Core/Dto`
+Defines package extension boundaries for chunkers, providers, manager orchestration, persistence, and search.
 
-- Main consumer-facing base class
-- Best for constructor-driven transport objects
-- Entry point for `from*()`, `toArray()`, `toJson()`, collection helpers, and immutable-style helpers such as `with()`
+### `DTOs/*`
 
-### `Core/Data`
+Carries typed package data such as chunks, embedding vectors, stored results, targets, and batch status.
 
-- Mutable counterpart to `Dto`
-- Uses the same hydration and normalization surface
-- Adds in-place mutation helpers and should be used deliberately because updates bypass recasting and revalidation
+### `Facades/*`
 
-### `Core/Context`
+Provides Laravel-facing entry points for embedding generation and search.
 
-- Immutable options bag for hydration and normalization
-- Carries naming strategy, validation toggle, serialization options, cast mode, and custom data
-- Some fields are public API placeholders with only partial runtime effect today
+## Runtime Modules
 
-### `Core/SerializationOptions`
+### `Services/Embedding/EmbeddingManager`
 
-- Controls output filtering, wrapping, depth, and lazy-property inclusion during normalization
+Primary orchestration service. Owns chunk/embed flows, persistence decisions, context overrides, ingestion helpers, queue helpers, and batch status delegation.
 
-## Runtime pipeline classes
+### `Services/Embedding/EmbeddingBatchTracker`
 
-### `Engine/Engine`
+Owns batch lifecycle records, progress counters, failure summaries, and status DTO conversion.
 
-- Orchestrates end-to-end hydration and normalization
-- Invokes lifecycle hooks such as `transformInput`, `afterHydration`, and `beforeSerialization`
-- Delegates actual mapping, metadata, hydration, and normalization to focused collaborators
+### `Services/Chunking/*`
 
-### `Hydration/Mapper`
+Splits text into `ChunkData`. Chunkers should not know about providers, queues, or storage.
 
-- Resolves source keys into DTO property names
-- Applies `MapFrom` and naming-strategy rules
-- Owns key lookup behavior, not casting or validation
+### `Services/Providers/Ollama/*`
 
-### `Hydration/Hydrator`
+Owns Ollama HTTP transport, request payloads, and response normalization.
 
-- Turns mapped input into constructor arguments and instantiates objects
-- Owns validation timing, casting flow, nested DTO hydration, and constructor argument resolution
+### `Services/Providers/OpenAI/*`
 
-### `Meta/MetaFactory`
+Reserved placeholder surface. Do not present as supported until runtime wiring and fallback tests exist.
 
-- Converts reflection data and supported attributes into `ClassMeta` and `PropertyMeta`
-- This is where agents should wire metadata extraction, not inside unrelated runtime classes
+### `Repositories/EloquentEmbeddingRepository`
 
-### `Normalization/Normalizer`
+Owns vector persistence, target filtering, staged batch activation, active/inactive visibility, metadata filters, and pgvector-backed search delegation.
 
-- Converts objects back into arrays
-- Applies output filtering, transformer logic, nested DTO normalization, and lazy-property handling
+### `Models/*`
 
-## Support classes and modules
+Eloquent representations for stored embeddings and embedding batch status. Connection/table names are config-driven.
 
-### `Validation/ValidatorRegistry`
+### `Jobs/*`
 
-- Registry and dispatcher for validator instances
-- Owns validation lookup and aggregation of violations
+Own queue execution, retry/backoff/timeout properties, overlap middleware, and batch status updates. Actual embedding work should be delegated to contracts.
 
-### `Casting/*`
+### `Support/PgvectorSimilarityQuery`
 
-- Encapsulates value conversion concerns
-- Add or change casting behavior here before reaching for hydrator changes
+Owns PostgreSQL driver checks, vector validation, distance selection, and `<=>` ordering.
 
-### `Schema/*`
+### `Services/Ingestion/ContentNormalizer`
 
-- Generates shallow JSON Schema and OpenAPI structures
-- Intended as lightweight contract export, not a full recursive schema system today
+Owns plain text, Markdown, HTML, and file normalization before chunking.
 
-### `Collections/*`
+## Placement Heuristics
 
-- Wraps DTO lists and paginator-like structures for transport-oriented output
+- Change `Services/Chunking/` for chunk boundary behavior
+- Change provider modules for API payloads, transport, or response shape
+- Change `Repositories/` for persistence, filters, replacement, and search storage behavior
+- Change `Jobs/` for queue execution behavior
+- Change `Support/` for isolated query/database helpers
+- Change docs whenever public runtime behavior changes
 
-### `Exceptions/*`
-
-- Defines structured error types and path-aware error composition
-
-## Placement heuristics
-
-- Change `Core/` when the public developer experience changes
-- Change `Meta/` when attribute or reflection extraction changes
-- Change `Hydration/` when input mapping, validation timing, or casting flow changes
-- Change `Normalization/` when output shape or transformer behavior changes
-- Change `Validation/` when rules or validator dispatch change
-- Change `Schema/` when exported schema shape changes
-
-## Definition of done
+## Definition Of Done
 
 - The agent can name the owning module before editing
 - Code changes land in the layer responsible for the behavior
-- Public foundation classes are edited more carefully than internal helpers
+- Public foundation contracts are edited more carefully than internal helpers

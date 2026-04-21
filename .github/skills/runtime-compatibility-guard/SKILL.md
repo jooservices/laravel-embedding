@@ -1,6 +1,6 @@
 ---
 name: runtime-compatibility-guard
-description: "Use when: changing runtime behavior, public APIs, hydration, validation, normalization, mutation semantics, or schema output; reviewing backward compatibility; or guarding against unsupported-feature drift."
+description: "Use when: changing runtime behavior, public APIs, provider support, persistence/search behavior, queue flows, or guarding against unsupported-feature drift."
 ---
 
 # Runtime Compatibility Guard Skill
@@ -15,24 +15,26 @@ Use this skill whenever a change can affect public behavior or developer expecta
 - Prefer additive changes over silent behavioral rewrites
 - Add regression tests for bug fixes
 - Update docs/examples when behavior changes
+- Keep provider and database support claims aligned with runtime code and tests
 
-## Current limitations that must stay explicit
+## Current Limitations That Must Stay Explicit
 
-- Declared attributes such as `Pipeline`, `StrictType`, and `DiscriminatorMap` are not fully wired into runtime behavior
-- Typed DTO arrays are not inferred automatically from PHPDoc
-- `Data::update()` and `Data::set()` bypass casting and validation
-- Schema generation for nested DTOs and arrays is shallow
+- OpenAI config is reserved, but OpenAI runtime embedding is not supported yet
+- Image embeddings are deferred until officially supported by Ollama `/api/embed`
+- Similarity search is PostgreSQL `pgvector` only
+- SQLite/MySQL persistence is storage-only through this package
+- `$model->queueEmbedding()` requires `getEmbeddableContent()`
 
-## Review checklist
+## Review Checklist
 
-1. Does the change alter hydration or casting behavior?
-2. Does the change affect validation timing or error messages?
-3. Does the change affect normalization or serialization output?
-4. Does the change alter mutability or update semantics?
-5. Does the change require docs, examples, or release notes?
-6. Does the change need integration coverage rather than unit coverage only?
+1. Does the change alter chunking, embedding, persistence, search, ingestion, or queue behavior?
+2. Does it affect public facade or contract expectations?
+3. Does it change provider support or documented database support?
+4. Does it require feature tests rather than unit tests only?
+5. Does it require docs, examples, or release notes?
+6. Does it keep unsupported runtime surfaces clearly marked?
 
-## Definition of done
+## Definition Of Done
 
 - Public behavior impact is understood and tested
 - Unsupported features are not accidentally marketed as supported

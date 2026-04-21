@@ -1,17 +1,17 @@
 ---
 name: task-routing-and-intent-map
-description: "Use when: deciding which repository skill or workflow to apply first; classifying user intent; and routing bugfix, feature, docs, CI, security, schema, review, and release work to the right skill set."
+description: "Use when: deciding which repository skill or workflow to apply first; classifying user intent; and routing bugfix, feature, docs, CI, security, review, and release work to the right skill set."
 ---
 
-# Task Routing and Intent Map Skill
+# Task Routing And Intent Map Skill
 
 ## Purpose
 
 This skill helps agents choose the right workflow before they start editing.
 
-## Routing map
+## Routing Map
 
-- New feature in `src/`:
+- New package feature in `src/`:
   - `repo-quality-foundation`
   - `code-style-and-conventions`
   - `architecture-and-design-principles`
@@ -25,14 +25,19 @@ This skill helps agents choose the right workflow before they start editing.
 - Docs drift or contributor guidance change:
   - `documentation-sync`
   - `architecture-and-design-principles`
+- Provider support change:
+  - `php-package-development`
+  - `runtime-compatibility-guard`
+  - `documentation-sync`
+  - `dependency-and-versioning-policy`
+- Persistence/search behavior:
+  - `class-purpose-and-module-map`
+  - `php-package-development`
+  - `review-and-risk-assessment`
 - CI, hooks, workflow, release automation:
   - `ci-hooks-maintenance`
   - `security-hardening`
   - `commit-and-pr-authoring`
-- Schema change:
-  - `schema-evolution`
-  - `runtime-compatibility-guard`
-  - `class-purpose-and-module-map`
 - Security or dependency issue:
   - `security-hardening`
   - `dependency-and-versioning-policy`
@@ -43,14 +48,14 @@ This skill helps agents choose the right workflow before they start editing.
   - `review-and-risk-assessment`
   - `commit-and-pr-authoring`
 
-## Fast classification questions
+## Fast Classification Questions
 
 1. Is the user asking for implementation, review, documentation, automation, or release work?
 2. Does the change touch public behavior?
-3. Does the change touch workflows, secrets, or dependencies?
-4. Is the work mainly code generation, bug triage, or policy enforcement?
+3. Does the change touch provider support, vector search, queues, persistence, or docs?
+4. Does the change touch workflows, secrets, or dependencies?
 
-## Definition of done
+## Definition Of Done
 
-- The agent can explain why it chose the starting skill set
-- The first workflow matches the actual task instead of forcing all tasks through one generic path
+- The agent can explain why it chose the starting skill set.
+- The first workflow matches the actual task instead of forcing all tasks through one generic path.
