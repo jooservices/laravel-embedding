@@ -24,6 +24,7 @@ Please read the complete documentation available in the `docs/` directory:
 
 - [Installation & Setup](docs/01-getting-started/installation.md)
 - [Usage & Asynchronous Processing](docs/02-user-guide/01-chunking-and-queues.md)
+- [PostgreSQL pgvector Performance](docs/02-user-guide/02-pgvector-performance.md)
 - [Dynamic Runtime Context](docs/03-examples/runtime-context.md)
 
 ## Basic Usage

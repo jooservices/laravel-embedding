@@ -105,6 +105,35 @@ final class EloquentEmbeddingRepositoryTest extends TestCase
         }
     }
 
+    public function test_store_batch_updates_existing_identities_instead_of_creating_duplicates(): void
+    {
+        $target = new EmbeddingTargetData('document', 'bulk-upsert', 'kb');
+        $vectors = [$this->makeVector(0), $this->makeVector(1)];
+        $this->repository->storeBatch($vectors, $target, ['version' => 'one']);
+
+        $updated = [
+            EmbeddingVectorData::make(
+                chunk: $vectors[0]->chunk,
+                vector: [9.0, 8.0, 7.0],
+                provider: 'ollama',
+                model: 'nomic-embed-text',
+            ),
+            EmbeddingVectorData::make(
+                chunk: $vectors[1]->chunk,
+                vector: [6.0, 5.0, 4.0],
+                provider: 'ollama',
+                model: 'nomic-embed-text',
+            ),
+        ];
+
+        $results = $this->repository->storeBatch($updated, $target, ['version' => 'two']);
+
+        $this->assertDatabaseCount('embeddings', 2);
+        $this->assertEquals([9.0, 8.0, 7.0], $results[0]->vector->vector);
+        $this->assertSame('two', $results[0]->meta['version']);
+        $this->assertEquals([6.0, 5.0, 4.0], $results[1]->vector->vector);
+    }
+
     public function test_store_updates_existing_identity_instead_of_creating_duplicate(): void
     {
         $first = $this->makeVector(0);

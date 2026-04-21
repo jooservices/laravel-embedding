@@ -46,18 +46,17 @@ final class EmbeddingSearchServiceTest extends TestCase
         $this->assertCount(0, $results);
     }
 
-    public function test_similar_to_vector_above_score_filters_results_by_score(): void
+    public function test_similar_to_vector_above_score_delegates_threshold_to_repository(): void
     {
         $provider = Mockery::mock(EmbeddingProvider::class);
         $repository = Mockery::mock(EmbeddingRepository::class);
 
         $repository->shouldReceive('searchSimilar')
             ->once()
-            ->with([0.1, 0.2], 6, ['min_score' => 0.8])
+            ->with([0.1, 0.2], 2, ['min_score' => 0.8])
             ->andReturn(new Collection([
                 $this->makeStoredResult(1, 0.05),
                 $this->makeStoredResult(2, 0.18),
-                $this->makeStoredResult(3, 0.4),
             ]));
 
         $service = new EmbeddingSearchService($provider, $repository);
@@ -113,7 +112,7 @@ final class EmbeddingSearchServiceTest extends TestCase
         $provider->shouldReceive('embed')->once()->andReturn($embedded);
         $repository->shouldReceive('searchSimilar')
             ->once()
-            ->with([0.9, 0.8], 3, ['min_score' => 0.95])
+            ->with([0.9, 0.8], 1, ['min_score' => 0.95])
             ->andReturn(collect([$this->makeStoredResult(9, 0.01)]));
 
         $service = new EmbeddingSearchService($provider, $repository);

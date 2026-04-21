@@ -8,7 +8,6 @@ use JOOservices\LaravelEmbedding\Contracts\EmbeddingProvider;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingRepository;
 use JOOservices\LaravelEmbedding\Contracts\EmbeddingSearch;
 use JOOservices\LaravelEmbedding\DTOs\ChunkData;
-use JOOservices\LaravelEmbedding\DTOs\StoredEmbeddingData;
 
 final class EmbeddingSearchService implements EmbeddingSearch
 {
@@ -33,17 +32,7 @@ final class EmbeddingSearchService implements EmbeddingSearch
 
     public function similarToVector(array $vector, int $limit = 5, array $filters = []): \Illuminate\Support\Collection
     {
-        $resultLimit = isset($filters['min_score']) ? max($limit * 3, $limit) : $limit;
-        $results = $this->repository->searchSimilar($vector, $resultLimit, $filters);
-
-        if (! isset($filters['min_score']) || ! is_numeric($filters['min_score'])) {
-            return $results->take($limit)->values();
-        }
-
-        $minScore = (float) $filters['min_score'];
-
-        return $results
-            ->filter(static fn (mixed $item): bool => $item instanceof StoredEmbeddingData && $item->score() !== null && $item->score() >= $minScore)
+        return $this->repository->searchSimilar($vector, $limit, $filters)
             ->take($limit)
             ->values();
     }

@@ -11,10 +11,12 @@ use JOOservices\LaravelEmbedding\Exceptions\InvalidEmbeddingDimensionException;
 use JOOservices\LaravelEmbedding\Facades\EmbeddingSearch;
 use JOOservices\LaravelEmbedding\Models\Embedding;
 use JOOservices\LaravelEmbedding\Models\EmbeddingBatch;
+use JOOservices\LaravelEmbedding\Repositories\EloquentEmbeddingRepository;
 use JOOservices\LaravelEmbedding\Services\Embedding\EmbeddingManager;
 use JOOservices\LaravelEmbedding\Tests\TestCase;
 use Mockery;
 use RuntimeException;
+use UnexpectedValueException;
 
 final class EmbeddingModelAndManagerTest extends TestCase
 {
@@ -62,6 +64,16 @@ final class EmbeddingModelAndManagerTest extends TestCase
         $this->expectExceptionMessage('Vector search is only supported on a PostgreSQL database');
 
         Embedding::query()->nearestTo([1.0, 2.0])->get();
+    }
+
+    public function test_search_similar_rejects_invalid_min_score_filter(): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('min_score');
+
+        (new EloquentEmbeddingRepository)->searchSimilar([1.0, 2.0], 5, [
+            'min_score' => 1.5,
+        ]);
     }
 
     public function test_invalid_embedding_dimension_exception(): void

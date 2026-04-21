@@ -31,18 +31,12 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
 
     public function storeBatch(array $vectors, Model|EmbeddingTargetData|null $target = null, array $meta = []): array
     {
-        return array_map(
-            fn (EmbeddingVectorData $vector): StoredEmbeddingData => $this->store($vector, $target, $meta),
-            $vectors,
-        );
+        return $this->persistBatch($vectors, $target, $meta);
     }
 
     public function stageBatch(array $vectors, Model|EmbeddingTargetData|null $target, array $meta, string $batchToken): array
     {
-        return array_map(
-            fn (EmbeddingVectorData $vector): StoredEmbeddingData => $this->stage($vector, $target, $meta, $batchToken),
-            $vectors,
-        );
+        return $this->persistBatch($vectors, $target, $meta, $batchToken, false);
     }
 
     /**
@@ -169,7 +163,11 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
 
     public function searchSimilar(array $embedding, int $limit = 5, array $filters = []): Collection
     {
-        return $this->applyFilters(PgvectorSimilarityQuery::apply(Embedding::query(), $embedding), $filters)
+        return $this->applyFilters(PgvectorSimilarityQuery::apply(
+            Embedding::query(),
+            $embedding,
+            $this->maxDistanceFromFilters($filters),
+        ), $filters)
             ->limit($limit)
             ->get()
             ->map(fn (Embedding $record): StoredEmbeddingData => $this->recordToDto($record));
@@ -331,6 +329,219 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
         return $this->toDto($record, $vector);
     }
 
+    /**
+     * @param  EmbeddingVectorData[]  $vectors
+     * @param  array<string, mixed>  $meta
+     * @return StoredEmbeddingData[]
+     */
+    private function persistBatch(
+        array $vectors,
+        Model|EmbeddingTargetData|null $target = null,
+        array $meta = [],
+        ?string $batchToken = null,
+        bool $isActive = true,
+    ): array {
+        if ($vectors === []) {
+            return [];
+        }
+
+        $connectionName = (new Embedding)->getConnectionName();
+
+        /** @var StoredEmbeddingData[] $stored */
+        $stored = DB::connection($connectionName)->transaction(function () use ($vectors, $target, $meta, $batchToken, $isActive): array {
+            $targetData = $this->normalizeTarget($target);
+            $existing = $this->existingRecordsForVectors($vectors, $targetData, $batchToken);
+            $now = now();
+            $rowsToInsert = [];
+            $table = (new Embedding)->getTable();
+            $connection = DB::connection((new Embedding)->getConnectionName());
+
+            foreach ($vectors as $vector) {
+                $row = $this->rowAttributes($vector, $target, $targetData, $meta, $batchToken, $isActive, $now);
+                $key = $this->identityKey($vector, $targetData, $batchToken);
+                $record = $existing->get($key);
+
+                if ($record instanceof Embedding) {
+                    $connection->table($table)
+                        ->where('id', $record->getKey())
+                        ->update($this->batchUpdateAttributes($row));
+
+                    continue;
+                }
+
+                $rowsToInsert[] = $row;
+            }
+
+            if ($rowsToInsert !== []) {
+                $connection->table($table)->insert($rowsToInsert);
+            }
+
+            return $this->storedVectorsForBatch($vectors, $targetData, $batchToken);
+        });
+
+        return $stored;
+    }
+
+    /**
+     * @param  EmbeddingVectorData[]  $vectors
+     * @return Collection<string, Embedding>
+     */
+    private function existingRecordsForVectors(array $vectors, ?EmbeddingTargetData $target, ?string $batchToken): Collection
+    {
+        return $this->matchingVectorQuery($vectors, $target, $batchToken)
+            ->get()
+            ->keyBy(fn (Embedding $record): string => $this->recordIdentityKey($record));
+    }
+
+    /**
+     * @param  EmbeddingVectorData[]  $vectors
+     * @return StoredEmbeddingData[]
+     */
+    private function storedVectorsForBatch(array $vectors, ?EmbeddingTargetData $target, ?string $batchToken): array
+    {
+        $records = $this->existingRecordsForVectors($vectors, $target, $batchToken);
+
+        return array_map(
+            function (EmbeddingVectorData $vector) use ($records, $target, $batchToken): StoredEmbeddingData {
+                $record = $records->get($this->identityKey($vector, $target, $batchToken));
+
+                if (! $record instanceof Embedding) {
+                    throw new UnexpectedValueException('Persisted embedding record could not be reloaded.');
+                }
+
+                return $this->recordToDto($record);
+            },
+            $vectors,
+        );
+    }
+
+    /**
+     * @param  EmbeddingVectorData[]  $vectors
+     */
+    private function matchingVectorQuery(array $vectors, ?EmbeddingTargetData $target, ?string $batchToken): Builder
+    {
+        return $this->applyBatchIdentityFilters(Embedding::query(), $target, $batchToken)
+            ->where(function (Builder $query) use ($vectors): void {
+                foreach ($vectors as $vector) {
+                    $query->orWhere(function (Builder $itemQuery) use ($vector): void {
+                        $itemQuery
+                            ->where('provider', $vector->provider)
+                            ->where('model', $vector->model)
+                            ->where('chunk_index', $vector->chunk->index)
+                            ->where('content_hash', $vector->chunk->contentHash);
+                    });
+                }
+            });
+    }
+
+    private function applyBatchIdentityFilters(Builder $query, ?EmbeddingTargetData $target, ?string $batchToken): Builder
+    {
+        if ($target === null || $target->type === null) {
+            $query->whereNull('target_type')->whereNull('target_id');
+        } else {
+            $query->forTarget($target->type, $target->id);
+        }
+
+        $target?->namespace === null
+            ? $query->whereNull('namespace')
+            : $query->inNamespace($target->namespace);
+
+        $batchToken === null
+            ? $query->whereNull('batch_token')
+            : $query->where('batch_token', $batchToken);
+
+        return $query;
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private function rowAttributes(
+        EmbeddingVectorData $vector,
+        Model|EmbeddingTargetData|null $target,
+        ?EmbeddingTargetData $targetData,
+        array $meta,
+        ?string $batchToken,
+        bool $isActive,
+        mixed $now,
+    ): array {
+        return [
+            'embeddable_type' => $target instanceof Model ? $target->getMorphClass() : null,
+            'embeddable_id' => $target instanceof Model ? $target->getKey() : null,
+            'target_type' => $targetData?->type,
+            'target_id' => $targetData?->id === null ? null : (string) $targetData->id,
+            'provider' => $vector->provider,
+            'model' => $vector->model,
+            'dimension' => $vector->dimension,
+            'chunk_index' => $vector->chunk->index,
+            'content' => $vector->chunk->content,
+            'content_hash' => $vector->chunk->contentHash,
+            'embedding' => $this->serializeEmbedding($vector->vector),
+            'namespace' => $targetData?->namespace,
+            'meta' => empty($meta) ? null : json_encode($meta, JSON_THROW_ON_ERROR),
+            'batch_token' => $batchToken,
+            'is_active' => $isActive,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function batchUpdateAttributes(array $row): array
+    {
+        unset($row['created_at']);
+
+        return $row;
+    }
+
+    /**
+     * @param  float[]  $embedding
+     */
+    private function serializeEmbedding(array $embedding): string
+    {
+        if ((new Embedding)->getConnection()->getDriverName() === 'pgsql') {
+            return '['.implode(',', $embedding).']';
+        }
+
+        return json_encode($embedding, JSON_THROW_ON_ERROR);
+    }
+
+    private function identityKey(EmbeddingVectorData $vector, ?EmbeddingTargetData $target, ?string $batchToken): string
+    {
+        $targetType = $target instanceof EmbeddingTargetData ? $target->type : null;
+        $targetId = $target instanceof EmbeddingTargetData ? $target->id : null;
+        $namespace = $target instanceof EmbeddingTargetData ? $target->namespace : null;
+
+        return implode('|', [
+            $targetType ?? '',
+            $targetId === null ? '' : (string) $targetId,
+            $namespace ?? '',
+            $vector->provider,
+            $vector->model,
+            (string) $vector->chunk->index,
+            $vector->chunk->contentHash,
+            $batchToken ?? '',
+        ]);
+    }
+
+    private function recordIdentityKey(Embedding $record): string
+    {
+        return implode('|', [
+            $record->target_type ?? '',
+            $record->target_id ?? '',
+            $record->namespace ?? '',
+            $record->provider,
+            $record->model,
+            (string) $record->chunk_index,
+            $record->content_hash,
+            $record->batch_token ?? '',
+        ]);
+    }
+
     private function applyMetaFilters(Builder $query, mixed $metaFilters): Builder
     {
         if (! is_array($metaFilters)) {
@@ -344,6 +555,24 @@ final class EloquentEmbeddingRepository implements EmbeddingRepository
         }
 
         return $query;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function maxDistanceFromFilters(array $filters): ?float
+    {
+        $minScore = $filters['min_score'] ?? null;
+
+        if (! is_int($minScore) && ! is_float($minScore)) {
+            return null;
+        }
+
+        if ($minScore < 0.0 || $minScore > 1.0 || ! is_finite((float) $minScore)) {
+            throw new UnexpectedValueException('The [min_score] filter must be a finite number between 0 and 1.');
+        }
+
+        return round(1.0 - (float) $minScore, 6);
     }
 
     private function applyTargetFilters(

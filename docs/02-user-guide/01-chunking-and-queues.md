@@ -34,7 +34,9 @@ This dispatches a `ProcessEmbeddingBatchJob`, which chunks the text and fans out
 
 When `skip_if_unchanged` is enabled, the batch job compares the incoming chunk hashes with the stored target set and skips dispatching chunk jobs when the hashes already match.
 
-When `replace_existing` is enabled in the fan-out flow, the batch job clears the target once before chunk jobs are dispatched so parallel workers do not delete each other's writes. This means old vectors are not kept around while the replacement chunk jobs are still running.
+When `replace_existing` is enabled in the fan-out flow, the package stages the new vectors as inactive rows first. Existing active vectors remain searchable while chunk jobs are running. After every chunk succeeds, the final chunk job activates the staged batch and removes the older active rows for the same target.
+
+If any chunk fails, the staged rows remain inactive and the previous active vectors continue serving search results. You can inspect batch status with `Embedding::batchStatus($batchId)` when using tracked queue helpers.
 
 ## Non-Eloquent Targets
 
@@ -69,6 +71,10 @@ foreach ($chunks as $chunk) {
 ```
 
 For a thinner package API, resolve the search service and pass filters there instead of querying the model directly.
+
+When using `EmbeddingSearch::similarToTextAboveScore()` or passing a numeric `min_score` filter, the package converts that score into a PostgreSQL distance threshold and applies it in SQL before limiting results. A score of `0.8` becomes a maximum cosine distance of `0.2`.
+
+For production index guidance, see [PostgreSQL pgvector Performance](./02-pgvector-performance.md).
 
 ## Auto-cleanup with Eloquent
 
